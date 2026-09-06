@@ -7,15 +7,29 @@ Runs entirely in the browser. No account, no server, no data leaves the device.
 
 ## Getting it onto an iPad
 
-1. Open the site in **Safari** (not Chrome — only Safari can install to the home screen on iOS).
-2. Tap the **Share** button.
-3. Scroll down and tap **Add to Home Screen**.
-4. Tap **Add**.
+Open the link **with the child's name in it** — one iPad, one child:
 
-It now launches full-screen from its own icon, and works offline.
+```
+https://<your-pages-url>/?child=Meher
+```
 
-Do this on each iPad. The first launch asks for both names; after that, each iPad
-remembers which child it belongs to.
+Then, in **Safari** (not Chrome — only Safari can install to the home screen on iOS):
+**Share** → **Add to Home Screen** → **Add**.
+
+It launches full-screen from its own icon, works offline, and shows only that
+child — no setup screen, no switcher.
+
+The **Plan** tab has a generator that builds both links for you.
+
+### Why the name goes in the link
+
+iOS gives a Home Screen web app a *different* storage container from Safari, and
+can evict that container on its own. A name typed into Safari therefore
+disappears the first time the app is opened from the Home Screen icon. Putting it
+in the link bakes it into the shortcut, where iOS cannot clear it.
+
+Opening the plain URL, with no `?child=`, still gives the original two-child mode
+with a switcher — useful on a shared laptop.
 
 ## What it covers
 

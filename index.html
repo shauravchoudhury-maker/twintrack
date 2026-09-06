@@ -75,6 +75,9 @@ button{font-family:inherit;font-size:inherit;cursor:pointer}
 .kid-btn{border:1px solid var(--rule);background:var(--panel);color:var(--ink-2);padding:5px 13px;border-radius:999px;
   font-weight:600;font-size:14px;transition:.15s}
 .kid-btn[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.whose{font-weight:700;font-size:15px;padding:5px 14px;border-radius:999px;background:var(--ink);color:var(--paper)}
+.linkout{font-family:var(--f-mono);font-size:13px;word-break:break-all;background:var(--sunk);
+  padding:9px 11px;border-radius:7px;margin:6px 0 0;user-select:all}
 .navs{display:flex;gap:2px;border-top:1px solid var(--rule-soft);max-width:820px;margin:0 auto;padding:0 20px}
 .nav{border:0;background:none;color:var(--ink-3);font-weight:600;font-size:14px;padding:9px 12px;
   border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -795,6 +798,9 @@ const LS_WHO = "twintrack_who";
 function loadLocal(){
   try{ const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s){ cfg=s.cfg||cfg; prog=s.prog||prog; } }catch(e){}
   try{ const w=parseInt(localStorage.getItem(LS_WHO),10); if(w===0||w===1) who=w; }catch(e){}
+  // Solo mode is a fact about the LINK, not about the stored data — otherwise
+  // opening the plain URL in Safari would still act like one child's iPad.
+  cfg.solo=false;
 }
 function saveLocal(){
   try{ localStorage.setItem(LS, JSON.stringify({cfg,prog})); }catch(e){
@@ -804,8 +810,34 @@ function saveLocal(){
 function saveAll(){ saveLocal(); }
 function rememberWho(){ try{ localStorage.setItem(LS_WHO,String(who)); }catch(e){} }
 
+/* ---------- whose iPad is this? ----------
+   iOS gives a Home Screen web app a DIFFERENT storage container from Safari,
+   and can evict that container on its own. A name typed into Safari therefore
+   vanishes the moment the app is opened from the Home Screen icon.
+   So the name rides in the link instead: add ?child=Meher to the URL you
+   install, and it is baked into the Home Screen shortcut, where iOS cannot
+   clear it. Storage still holds the progress; the name no longer depends on it. */
+function cleanName(s){
+  return String(s||"").replace(/[^\p{L}\p{M}\s'’-]/gu,"").trim().slice(0,24);
+}
+function readChildFromURL(){
+  let raw="";
+  try{ raw=new URLSearchParams(location.search).get("child")||""; }catch(e){}
+  return cleanName(raw);
+}
+
 function boot(){
   loadLocal();
+  const urlChild=readChildFromURL();
+  if(urlChild){
+    // This device belongs to one child. No setup screen, no switcher, ever —
+    // and the name survives anything iOS does to storage.
+    cfg.solo=true;
+    cfg.names=[urlChild, cfg.names[1]||"Child two"];
+    cfg.setup=true;
+    who=0;
+    saveLocal();
+  }
   render();
   if("serviceWorker" in navigator){
     window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{}));
@@ -873,6 +905,11 @@ function render(){
 
 function renderKids(){
   const box=$("kids"); box.innerHTML="";
+  if(cfg.solo){
+    // One child, one iPad — a switcher would only be something to tap by mistake.
+    box.appendChild(el("span","whose",esc(cfg.names[0])));
+    return;
+  }
   cfg.names.forEach((n,i)=>{
     const b=el("button","kid-btn",esc(n));
     b.setAttribute("aria-pressed", i===who ? "true":"false");
@@ -1302,6 +1339,43 @@ function planBody(){
   });
   rows+='</tbody></table>';
   tw.innerHTML=rows; d.appendChild(tw);
+
+  // ---- per-iPad install links ----
+  const dev=el("div","card"); dev.style.margin="22px 0";
+  dev.innerHTML='<div class="eyebrow" style="margin-bottom:6px">Setting up each iPad</div>'+
+    '<p class="muted" style="font-size:13.5px;margin:0 0 12px;max-width:60ch">'+
+    'iOS gives a Home Screen app its own storage and can clear it, so a typed-in name does not always survive. '+
+    'Put the child’s name in the link instead and it is baked into the Home Screen icon for good. '+
+    'Type the two names, then open each link on that child’s iPad and use <b>Share → Add to Home Screen</b>.</p>';
+  const inrow=el("div","split");
+  const iA=el("input"); iA.type="text"; iA.placeholder="First child"; iA.style.width="100%"; iA.style.fontFamily="var(--f-body)";
+  const iB=el("input"); iB.type="text"; iB.placeholder="Second child"; iB.style.width="100%"; iB.style.fontFamily="var(--f-body)";
+  if(cfg.setup){ iA.value=cfg.names[0]===("Child one")?"":cfg.names[0]; iB.value=cfg.names[1]===("Child two")?"":cfg.names[1]; }
+  const wA=el("label",null,"Their iPad"); wA.appendChild(iA);
+  const wB=el("label",null,"Their twin’s iPad"); wB.appendChild(iB);
+  inrow.appendChild(wA); inrow.appendChild(wB);
+  dev.appendChild(inrow);
+  const outs=el("div"); outs.style.marginTop="12px";
+  dev.appendChild(outs);
+  function base(){ return location.origin+location.pathname.replace(/index\.html$/,""); }
+  function refresh(){
+    outs.innerHTML="";
+    [iA.value,iB.value].forEach((v)=>{
+      const nm=cleanName(v); if(!nm) return;
+      const url=base()+"?child="+encodeURIComponent(nm);
+      const wrapl=el("div"); wrapl.style.marginBottom="10px";
+      wrapl.appendChild(el("div","eyebrow",esc(nm)+"’s iPad"));
+      const p=el("p","linkout",esc(url));
+      wrapl.appendChild(p);
+      const cp=el("button","btn sm ghost","Copy link"); cp.style.marginTop="6px";
+      cp.onclick=()=>{ navigator.clipboard?.writeText(url).then(()=>{ cp.textContent="Copied ✓";
+        setTimeout(()=>cp.textContent="Copy link",1400); }).catch(()=>{}); };
+      wrapl.appendChild(cp);
+      outs.appendChild(wrapl);
+    });
+  }
+  iA.oninput=refresh; iB.oninput=refresh; refresh();
+  d.appendChild(dev);
 
   d.appendChild(el("p","note","Built on the 2023 New Jersey Student Learning Standards for Grade 5. The daily fluency sprint borrows Kumon's timed-completion standard; the spiral review and the root retrieval apply spaced practice and retrieval, which outperform re-reading by a wide margin in classroom studies."));
   return d;
