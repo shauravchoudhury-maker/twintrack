@@ -1,0 +1,56 @@
+Twin Track — Firestore security rules
+=====================================
+
+Paste this into the Firebase console for project `eververse2117`:
+  Build → Firestore Database → Rules → Publish.
+
+IMPORTANT: keep your existing EverVerse rules. Add the twintrack block INSIDE
+the same `match /databases/{database}/documents { ... }` — do not replace the
+file, or reactions and comments on eververse.org will stop working.
+
+    // ---- Twin Track: one document per child, under a family code ----
+    match /twintrack/{fam}/children/{child} {
+      allow read: if true;
+      allow create, update: if
+        request.resource.data.keys().hasOnly(['name','lesson','streak','last','updatedAt','data'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 24
+        && request.resource.data.lesson is int
+        && request.resource.data.lesson >= 1
+        && request.resource.data.lesson <= 105
+        && request.resource.data.streak is int
+        && request.resource.data.streak >= 0
+        && request.resource.data.streak <= 400
+        && request.resource.data.data is string
+        && request.resource.data.data.size() <= 60000;
+      allow delete: if false;
+    }
+
+
+What these rules do
+-------------------
+Only documents at `twintrack/<family code>/children/<child>` can be written,
+and only with those six fields, of those types, within those limits. Nothing
+else in your database is reachable. Deletes are refused entirely, so a child
+cannot wipe their own record.
+
+There is deliberately NO rule for `/twintrack/{fam}` itself. That means the
+family codes cannot be listed by anyone — you have to already know the code to
+read anything, and the code is 16 random characters.
+
+
+What is and is not stored
+-------------------------
+Sent:      first name, lesson number, streak, and the scores (how many correct
+           out of how many, and sprint times in seconds).
+Never sent: everything the children write. The writing studio, the weekly
+           reflection, the reading responses and the book log are not
+           transmitted, and are not even saved to the iPad — they exist only
+           on screen while the child is working.
+
+The trade-off worth knowing: anyone who learns a family code can read that
+family's lesson numbers and scores, and could write junk into them. There are
+no accounts. Given the data is first names and math scores, that is a
+reasonable trade for a setup with nothing to log into. If you would rather it
+were locked down properly, the next step is Firebase Anonymous Auth with a
+per-device token — ask and I will add it.

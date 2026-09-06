@@ -78,6 +78,17 @@ button{font-family:inherit;font-size:inherit;cursor:pointer}
 .whose{font-weight:700;font-size:15px;padding:5px 14px;border-radius:999px;background:var(--ink);color:var(--paper)}
 .linkout{font-family:var(--f-mono);font-size:13px;word-break:break-all;background:var(--sunk);
   padding:9px 11px;border-radius:7px;margin:6px 0 0;user-select:all}
+.syncdot{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;
+  border-radius:999px;margin-left:8px;white-space:nowrap;align-self:center}
+.syncdot.good{background:var(--good-soft);color:var(--good)}
+.syncdot.bad{background:var(--warn-soft);color:var(--warn)}
+.syncdot.idle{background:var(--sunk);color:var(--ink-3)}
+.pstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px 18px;margin-top:16px}
+.flags{list-style:none;padding:0;margin:16px 0 0;display:flex;flex-direction:column;gap:7px}
+.flag{font-size:14px;padding:8px 12px;border-radius:7px;border-left:3px solid var(--rule)}
+.flag.good{background:var(--good-soft);color:var(--good);border-left-color:var(--good)}
+.flag.warn{background:var(--warn-soft);color:var(--warn);border-left-color:var(--warn)}
+.flag.bad{background:var(--warn-soft);color:var(--warn);border-left-color:var(--warn);font-weight:600}
 .navs{display:flex;gap:2px;border-top:1px solid var(--rule-soft);max-width:820px;margin:0 auto;padding:0 20px}
 .nav{border:0;background:none;color:var(--ink-3);font-weight:600;font-size:14px;padding:9px 12px;
   border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -826,8 +837,24 @@ function readChildFromURL(){
   return cleanName(raw);
 }
 
+function isParentView(){
+  try{ return new URLSearchParams(location.search).get("parent")==="1"; }catch(e){ return false; }
+}
+
 function boot(){
   loadLocal();
+  FAM = readFamFromURL();
+  if(isParentView() && FAM){
+    // Parent mode is a different app: read-only, no lessons, no local record.
+    document.querySelector(".navs").style.display="none";
+    $("kids").innerHTML="";
+    $("setup").classList.add("hidden");
+    $("view-progress").classList.add("hidden");
+    $("view-plan").classList.add("hidden");
+    $("view-today").classList.remove("hidden");
+    renderParent($("view-today"), FAM);
+    return;
+  }
   const urlChild=readChildFromURL();
   if(urlChild){
     // This device belongs to one child. No setup screen, no switcher, ever —
@@ -891,6 +918,7 @@ const seedFor = (n, blockKey) => { let s = (who+1)*7919 + n*104729;
    ============================================================ */
 function render(){
   renderKids();
+  renderSyncBadge();
   $("setup").classList.toggle("hidden", cfg.setup);
   $("view-today").classList.toggle("hidden", view!=="today");
   $("view-progress").classList.toggle("hidden", view!=="progress");
@@ -1208,6 +1236,7 @@ function logBlock(n,kind,data){
   prog[c].log[k]=prog[c].log[k]||{};
   prog[c].log[k][kind]=data;
   saveAll();
+  cloudPushSoon();
 }
 
 function completeDay(n){
@@ -1215,7 +1244,7 @@ function completeDay(n){
   if(prog[c].last!==today){ prog[c].streak=(prog[c].streak||0)+1; prog[c].last=today; }
   prog[c].lesson=Math.min(TOTAL_DAYS,n+1);
   Object.keys(answered).forEach(k=>delete answered[k]);
-  saveAll(); render(); window.scrollTo({top:0,behavior:"smooth"});
+  saveAll(); cloudPush(); render(); window.scrollTo({top:0,behavior:"smooth"});
 }
 
 /* ---------- progress ---------- */
@@ -1381,6 +1410,250 @@ function planBody(){
   return d;
 }
 
+
+/* ============================================================
+   CLOUD SYNC — optional, and off unless the link carries a code
+   ============================================================
+   Each iPad pushes a small progress record to Firestore so a parent can
+   check in from anywhere. Uses the REST API rather than the Firebase SDK:
+   one fetch instead of ~100KB of JavaScript on a child's iPad.
+
+   The `fam` code in the link is the shared secret. Nothing identifying is
+   ever sent — first name, lesson number, streak, and the scores. The
+   writing and reflection boxes are deliberately NOT synced and are not
+   even stored locally; what a child writes about their week stays on
+   their own device.
+
+   If the code is absent, or the network is down, or the rules are not
+   published yet, everything still works offline exactly as before. */
+
+const FB = {
+  project: "eververse2117",
+  key: "AIzaSyCD7IWtNtfyxVHo0GcEiUwAZN2RGB8u8vc",
+};
+let FAM = "";
+let cloudState = { on:false, ok:null, at:0, msg:"" };
+
+function readFamFromURL(){
+  try{ return (new URLSearchParams(location.search).get("fam")||"").replace(/[^A-Za-z0-9_-]/g,"").slice(0,32); }
+  catch(e){ return ""; }
+}
+const fbBase = () =>
+  "https://firestore.googleapis.com/v1/projects/"+FB.project+"/databases/(default)/documents";
+const childSlug = (name) => (name||"child").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32) || "child";
+
+// The parts of a child's record worth carrying — scores only, no prose.
+function cloudPayload(){
+  const c=ck(), p=prog[c];
+  const log={};
+  Object.keys(p.log||{}).forEach(k=>{
+    const L=p.log[k], out={};
+    if(L.math&&L.math.of) out.m=[L.math.score,L.math.of];
+    if(L.spiral&&L.spiral.of) out.s=[L.spiral.score,L.spiral.of];
+    if(L.check&&L.check.of) out.c=[L.check.score,L.check.of];
+    if(L.sprint&&L.sprint.of) out.f=[L.sprint.score,L.sprint.of,L.sprint.sec||0];
+    if(L.reading) out.r=1;
+    if(L.writing) out.w=1;
+    if(Object.keys(out).length) log[k]=out;
+  });
+  return { name:cfg.names[who], lesson:p.lesson, streak:p.streak||0,
+           last:p.last||"", updatedAt:new Date().toISOString(), log };
+}
+
+let pushTimer=null;
+function cloudPushSoon(){
+  if(!FAM) return;
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(cloudPush, 2500);   // batch a burst of block completions
+}
+async function cloudPush(){
+  if(!FAM) return;
+  const pay=cloudPayload();
+  const url=fbBase()+"/twintrack/"+encodeURIComponent(FAM)+"/children/"+encodeURIComponent(childSlug(pay.name))+"?key="+FB.key;
+  const body={ fields:{
+    name:{stringValue:String(pay.name).slice(0,24)},
+    lesson:{integerValue:String(pay.lesson)},
+    streak:{integerValue:String(pay.streak)},
+    last:{stringValue:pay.last},
+    updatedAt:{stringValue:pay.updatedAt},
+    data:{stringValue:JSON.stringify(pay.log).slice(0,60000)},
+  }};
+  try{
+    const res=await fetch(url,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(res.ok){ cloudState={on:true,ok:true,at:Date.now(),msg:""}; }
+    else{
+      const t=await res.text().catch(()=>"");
+      cloudState={on:true,ok:false,at:Date.now(),
+        msg: res.status===403 ? "Firestore rules not published yet" : "HTTP "+res.status};
+      if(res.status===403) console.warn("Twin Track: Firestore refused the write. Publish the rules from the README.", t.slice(0,200));
+    }
+  }catch(e){ cloudState={on:true,ok:false,at:Date.now(),msg:"offline"}; }
+  renderSyncBadge();
+}
+
+async function cloudPullAll(fam){
+  const url=fbBase()+"/twintrack/"+encodeURIComponent(fam)+"/children?key="+FB.key+"&pageSize=10";
+  const res=await fetch(url);
+  if(!res.ok) throw new Error(res.status===403 ? "Firestore rules are not published yet" : "HTTP "+res.status);
+  const j=await res.json();
+  return (j.documents||[]).map(d=>{
+    const f=d.fields||{};
+    let log={}; try{ log=JSON.parse((f.data&&f.data.stringValue)||"{}"); }catch(e){}
+    return { name:(f.name&&f.name.stringValue)||"—",
+             lesson:parseInt((f.lesson&&f.lesson.integerValue)||"1",10),
+             streak:parseInt((f.streak&&f.streak.integerValue)||"0",10),
+             last:(f.last&&f.last.stringValue)||"",
+             updatedAt:(f.updatedAt&&f.updatedAt.stringValue)||"", log };
+  });
+}
+
+function renderSyncBadge(){
+  const box=$("kids"); if(!box) return;
+  let b=box.querySelector(".syncdot");
+  if(!FAM){ if(b) b.remove(); return; }
+  if(!b){ b=el("span","syncdot"); box.appendChild(b); }
+  const ok=cloudState.ok;
+  b.className="syncdot "+(ok===true?"good":ok===false?"bad":"idle");
+  b.title = ok===true ? "Progress sent to the family record."
+          : ok===false ? "Not syncing: "+cloudState.msg+". Work is still saved on this iPad."
+          : "Waiting to sync.";
+  b.textContent = ok===true?"synced":ok===false?"not syncing":"…";
+}
+
+/* ============================================================
+   PARENT DASHBOARD  —  ?parent=1&fam=CODE
+   Read-only. Answers "are they actually doing it, and is anything
+   going wrong" rather than just listing numbers.
+   ============================================================ */
+
+function pctOf(pairs){ // pairs: [[score,of],...]
+  const t=pairs.reduce((s,p)=>s+p[1],0), g=pairs.reduce((s,p)=>s+p[0],0);
+  return t ? Math.round(g/t*100) : null;
+}
+function daysSince(iso){
+  if(!iso) return null;
+  const d=new Date(iso); if(isNaN(d)) return null;
+  return Math.floor((Date.now()-d.getTime())/86400000);
+}
+
+// Everything the dashboard says about one child, derived once.
+function analyse(kid){
+  const L=kid.log||{};
+  const keys=Object.keys(L).map(k=>+k.slice(1)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  const at=(n,f)=>{ const e=L["L"+n]; return e&&e[f]?e[f]:null; };
+  const mathAll=[], mathRecent=[], sprintTimes=[], checks=[];
+  keys.forEach(n=>{
+    const m=at(n,"m"); if(m) mathAll.push(m);
+    const f=at(n,"f"); if(f&&f[2]) sprintTimes.push({L:n,sec:f[2]});
+    const c=at(n,"c"); if(c) checks.push({L:n,pct:Math.round(c[0]/c[1]*100)});
+  });
+  const recentKeys=keys.slice(-7);
+  recentKeys.forEach(n=>{ const m=at(n,"m"); if(m) mathRecent.push(m); });
+
+  const expected=Math.max(1,Math.min(TOTAL_DAYS, scheduledToday()));
+  const behind=expected-kid.lesson;
+  const idle=daysSince(kid.updatedAt);
+  const sprintTrend = sprintTimes.length>=4
+    ? (sprintTimes.slice(-3).reduce((s,x)=>s+x.sec,0)/3) - (sprintTimes.slice(0,3).reduce((s,x)=>s+x.sec,0)/3)
+    : null;
+
+  const flags=[];
+  if(idle!==null && idle>=3) flags.push({level:"bad", text:"No activity for "+idle+" days"});
+  else if(idle!==null && idle>=2) flags.push({level:"warn", text:"Nothing logged in 2 days"});
+  const accRecent=pctOf(mathRecent);
+  if(accRecent!==null && accRecent<70) flags.push({level:"bad", text:"Math accuracy "+accRecent+"% over the last week — the current topic is not landing"});
+  else if(accRecent!==null && accRecent<80) flags.push({level:"warn", text:"Math accuracy "+accRecent+"% — just under the mastery line"});
+  if(behind>=7) flags.push({level:"bad", text:behind+" lessons behind the calendar — a week or more"});
+  else if(behind>=3) flags.push({level:"warn", text:behind+" lessons behind the calendar"});
+  const lowChecks=checks.slice(-2).filter(c=>c.pct<80);
+  if(lowChecks.length===2) flags.push({level:"warn", text:"Two Sunday checks in a row under 80% — repeat the week rather than advancing"});
+  if(!flags.length && keys.length) flags.push({level:"good", text:"On track — nothing needs your attention"});
+
+  return { keys, mathAll, mathRecent, sprintTimes, checks, expected, behind, idle,
+           accAll:pctOf(mathAll), accRecent, sprintTrend, flags,
+           sessions:keys.length,
+           week:weekOf(kid.lesson) };
+}
+
+function renderParent(root, fam){
+  root.innerHTML="";
+  root.appendChild(el("div","dayhead",
+    '<div class="eyebrow">Family record</div><h1>How they are doing</h1>'+
+    '<p class="muted" style="margin:0;max-width:60ch">Updated automatically from each iPad. '+
+    'Read-only — nothing here changes what the children see.</p>'));
+
+  const status=el("p","muted"); status.style.margin="16px 0"; status.textContent="Loading the latest…";
+  root.appendChild(status);
+  const host=el("div","stack"); root.appendChild(host);
+
+  cloudPullAll(fam).then(kids=>{
+    status.remove();
+    if(!kids.length){
+      host.appendChild(el("div","card",
+        '<b>Nothing has arrived yet.</b><div class="muted" style="font-size:14px;margin-top:6px">'+
+        'Either no lesson has been finished on a synced iPad, or the Firestore rules are not published. '+
+        'The children\'s work is safe on their iPads either way.</div>'));
+      return;
+    }
+    kids.sort((a,b)=>a.name.localeCompare(b.name));
+    kids.forEach(kid=>host.appendChild(parentCard(kid)));
+
+    const foot=el("p","note",
+      "Behind the calendar is not automatically a problem — the plan is 105 lessons, not 105 dates, and repeating a hard week is the design working. "+
+      "Two things are worth acting on: several days of silence, and accuracy sitting under 70%.");
+    host.appendChild(foot);
+  }).catch(e=>{
+    status.className="result show part";
+    status.textContent="Could not load: "+e.message+". The iPads keep working regardless.";
+  });
+}
+
+function parentCard(kid){
+  const a=analyse(kid);
+  const card=el("div","card");
+  const head=el("div","row");
+  head.innerHTML='<h2 style="font-size:21px;margin:0;flex:1">'+esc(kid.name)+'</h2>';
+  const worst=a.flags.reduce((w,f)=>f.level==="bad"?"bad":(w==="bad"?"bad":f.level),"good");
+  head.appendChild(el("span","pill "+(worst==="bad"?"warn":worst==="warn"?"warn":"good"),
+    worst==="good"?"On track":worst==="warn"?"Worth a look":"Needs attention"));
+  card.appendChild(head);
+
+  const stats=el("div","pstats");
+  const cell=(lab,val,sub)=>'<div><div class="eyebrow">'+lab+'</div>'+
+    '<div class="mono" style="font-size:26px;font-weight:600;line-height:1.2">'+val+'</div>'+
+    '<div class="muted" style="font-size:12.5px">'+(sub||"")+'</div></div>';
+  stats.innerHTML=
+    cell("Lesson", kid.lesson+" <span style='font-size:15px;color:var(--ink-3)'>/ "+TOTAL_DAYS+"</span>",
+         "Week "+a.week+(a.behind>0?" · "+a.behind+" behind":a.behind<0?" · "+(-a.behind)+" ahead":" · on the day"))+
+    cell("Streak", a.idle!==null&&a.idle>=2 ? "0" : String(kid.streak),
+         a.idle===null?"—":a.idle===0?"active today":a.idle===1?"last active yesterday":"last active "+a.idle+" days ago")+
+    cell("Math accuracy", a.accAll===null?"—":a.accAll+"%",
+         a.accRecent===null?"no sessions yet":"last 7 sessions: "+a.accRecent+"%")+
+    cell("Sessions logged", String(a.sessions),
+         a.sprintTrend===null?"—":a.sprintTrend<-3?"sprint getting faster":a.sprintTrend>3?"sprint slowing":"sprint steady");
+  card.appendChild(stats);
+
+  if(a.sprintTimes.length>1){
+    const mx=Math.max(...a.sprintTimes.map(s=>s.sec));
+    const box=el("div"); box.style.marginTop="14px";
+    box.innerHTML='<div class="eyebrow" style="margin-bottom:7px">Sprint time — shorter is better</div>';
+    const sp=el("div","spark");
+    a.sprintTimes.slice(-30).forEach(s=>{ const i=el("i");
+      i.style.height=Math.max(2,Math.round(s.sec/mx*30))+"px";
+      i.title="Lesson "+s.L+": "+s.sec+"s"; sp.appendChild(i); });
+    box.appendChild(sp);
+    card.appendChild(box);
+  }
+
+  const fl=el("ul","flags");
+  a.flags.forEach(f=>{
+    const li=el("li","flag "+f.level);
+    li.textContent=f.text;
+    fl.appendChild(li);
+  });
+  card.appendChild(fl);
+  return card;
+}
 /* ---------- wiring ---------- */
 document.querySelectorAll(".nav").forEach(b=>{ b.onclick=()=>{ view=b.dataset.view; render(); window.scrollTo({top:0}); }; });
 $("save-names").onclick=()=>{

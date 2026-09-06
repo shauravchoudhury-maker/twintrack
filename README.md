@@ -71,6 +71,32 @@ Sunday deliberately introduces nothing new.
   spaced retrieval practice rather than re-reading.
 - Answers accept `3/4`, `6/8` and `0.75` as the same value.
 
+## Checking progress remotely
+
+Optional. Add a **family code** to each link and the iPads send a small progress
+record to Firestore; a parent can then open a dashboard from anywhere.
+
+```
+iPads:      /?child=Meher&fam=YOUR_CODE
+Dashboard:  /?parent=1&fam=YOUR_CODE
+```
+
+The dashboard is read-only and shows, per child: current lesson against the
+calendar, streak, days since last activity, math accuracy overall and over the
+last week, sprint-time trend, and a plain-language list of anything worth acting
+on ("no activity for 4 days", "accuracy 64% — the current topic is not landing").
+
+Setup is one step: publish the rules in [`FIRESTORE_RULES.txt`](FIRESTORE_RULES.txt)
+to your Firebase project. Until you do, writes are refused and the app shows
+**not syncing** in the corner — work still saves to the iPad as normal.
+
+**What is sent:** first name, lesson number, streak, scores.
+**What is never sent:** anything the children write. The writing studio, weekly
+reflection, reading responses and book log stay on the device and are not even
+saved locally — they exist only on screen while the child is working.
+
+Leave `fam` out of the links and no network calls are made at all.
+
 ## Backup
 
 Progress lives in the browser's local storage, which clearing Safari data will
