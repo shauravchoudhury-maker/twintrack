@@ -15,6 +15,7 @@
 <meta name="apple-mobile-web-app-title" content="Twin Track">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
+<script src="english.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 :root{
@@ -659,21 +660,19 @@ const SHAPES = {
     { k:"sprint",  t:"Number Sprint",   s:"Timed fluency — beat your target",         m:5,  strand:"math" },
     { k:"mathnew", t:"Math Focus",      s:"This week's topic, worked through",        m:15, strand:"math" },
     { k:"spiral",  t:"Spiral Review",   s:"Problems from earlier weeks",              m:5,  strand:"math" },
-    { k:"reading", t:"Reading",         s:"Passage or your own book",                 m:10, strand:"eng" },
-    { k:"roots",   t:"Word Roots",      s:"Three roots, plus older ones back again",  m:5,  strand:"eng" },
-    { k:"grammar", t:"Sentence Work",   s:"One rule, three items",                    m:5,  strand:"eng" },
+    { k:"reading", t:"Reading",         s:"Passage or your own book, then the questions", m:10, strand:"eng" },
   ],
   saturday: [
     { k:"sprint",  t:"Number Sprint",   s:"Timed fluency — beat your target",         m:5,  strand:"math" },
     { k:"mathnew", t:"Math Focus",      s:"This week's topic, worked through",        m:10, strand:"math" },
-    { k:"writing", t:"Writing Studio",  s:"The week's long piece — plan, draft, edit", m:25, strand:"eng" },
-    { k:"roots",   t:"Word Roots",      s:"Retrieval of every root so far",           m:5,  strand:"eng" },
+    { k:"writing", t:"Writing Studio",  s:"Topic sentence, details, examples, closing", m:30, strand:"eng" },
   ],
   sunday: [
     { k:"check",   t:"Mastery Check",   s:"Ten mixed problems from this week",        m:15, strand:"math" },
-    { k:"fix",     t:"Error Fix",       s:"Redo what the check caught",               m:10, strand:"math" },
-    { k:"free",    t:"Free Reading",    s:"Your own book, then log it",               m:15, strand:"eng" },
-    { k:"reflect", t:"Week Review",     s:"What got easier, what is still hard",      m:5,  strand:"eng" },
+    { k:"fix",       t:"Error Fix",     s:"Redo what the check caught",               m:5,  strand:"math" },
+    { k:"dictation", t:"Spelling Test", s:"Dictation, plus the words from memory",     m:10, strand:"eng" },
+    { k:"free",      t:"Free Reading",  s:"Your own book, then log it",                m:10, strand:"eng" },
+    { k:"reflect",   t:"Week Review",   s:"What got easier, what is still hard",       m:5,  strand:"eng" },
   ]
 };
 
@@ -1107,7 +1106,21 @@ function importProgress(file){
 const lessonOf = (c) => Math.min(TOTAL_DAYS, Math.max(1, prog[c].lesson));
 const weekOf = (n) => Math.min(15, Math.floor((n-1)/7)+1);
 const dowOf = (n) => (n-1)%7;              // 0 = Monday
-const shapeOf = (n) => dowOf(n)===5 ? SHAPES.saturday : dowOf(n)===6 ? SHAPES.sunday : SHAPES.weekday;
+// Each English strand gets a real 10-minute block once a week rather than
+// three rushed minutes every day.
+const ENG_SLOTS = {
+  vocab:    { k:"vocab",    t:"Vocabulary",         s:"Eight new words, in your own words",     m:10, strand:"eng" },
+  spelling: { k:"spelling", t:"Spelling",           s:"This week's pattern, then from memory",  m:10, strand:"eng" },
+  sentence: { k:"sentence", t:"Sentence Structure", s:"How a sentence is built",                m:10, strand:"eng" },
+  vocabuse: { k:"vocabuse", t:"Use the Words",      s:"A paragraph, plus the roots behind more", m:10, strand:"eng" },
+  grammar:  { k:"grammar",  t:"Grammar",            s:"One rule, three items",                  m:10, strand:"eng" },
+};
+function shapeOf(n){
+  const d = dowOf(n);
+  if (d === 5) return SHAPES.saturday;
+  if (d === 6) return SHAPES.sunday;
+  return SHAPES.weekday.concat([ENG_SLOTS[engSlot(n)]]);
+}
 const DOW = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 function dateOfLesson(n){ const d=new Date(START); d.setDate(d.getDate()+(n-1)); return d; }
 function scheduledToday(){ const t=new Date(); t.setHours(0,0,0,0);
@@ -1341,11 +1354,13 @@ const BUILD = {
         d.appendChild(sh); d.appendChild(ans);
         host.appendChild(d);
       });
+      comprehensionFrame(host, "the passage");
     } else {
       const pr=OWN_BOOK_PROMPTS[(n*3)%OWN_BOOK_PROMPTS.length];
       host.appendChild(el("div","example eng",'<h4>Your own book &middot; 10 minutes</h4><p>Read, then answer:</p><p><b>'+esc(pr)+'</b></p>'));
       host.appendChild(el("p","muted","Volume of real reading matters more than any worksheet. Keep one book going the whole week."));
       const ta=el("textarea"); ta.placeholder="Book, pages read, and your answer."; host.appendChild(ta);
+      comprehensionFrame(host, "today's pages");
     }
     const b=el("button","btn sm","Mark reading done"); b.style.marginTop="12px";
     b.onclick=()=>{ logBlock(n,"reading",{done:true}); markDone(key,b); };
@@ -1403,13 +1418,19 @@ const BUILD = {
 
   writing(host,{n,wk,key}){
     host.appendChild(el("div","example eng",'<h4>This week’s piece</h4><p>'+esc(wk.write)+'</p>'));
-    host.appendChild(el("p","muted","Plan for five minutes before you write. Draft for fifteen. Spend the last five reading it aloud and fixing what your ear catches."));
-    ["Plan — what am I arguing, and what evidence?","Draft","What I changed when I read it aloud"].forEach((lab)=>{
-      const d=el("div"); d.style.margin="12px 0";
-      d.innerHTML='<div class="eyebrow" style="margin-bottom:5px">'+esc(lab)+'</div>';
-      const ta=el("textarea"); if(lab==="Draft") ta.style.minHeight="180px";
+    host.appendChild(el("p","muted","Build the paragraph one part at a time. Each box is a job, and the closing sentence is the one people skip."));
+    PARAGRAPH.forEach((sec,i)=>{
+      const d=el("div"); d.style.margin="14px 0";
+      d.innerHTML='<div class="eyebrow" style="margin-bottom:4px">'+(i+1)+' &middot; '+esc(sec.t)+'</div>'+
+        '<div class="muted" style="font-size:13px;margin-bottom:6px">'+esc(sec.h)+'</div>';
+      const ta=el("textarea");
+      ta.style.minHeight = sec.k==="detail" ? "110px" : sec.k==="example" ? "90px" : "60px";
       d.appendChild(ta); host.appendChild(d);
     });
+    host.appendChild(el("p","muted","Now read the whole paragraph aloud. If it does not flow from one part to the next, the joins are what to fix — not the words."));
+    const edit=el("div"); edit.style.margin="12px 0";
+    edit.innerHTML='<div class="eyebrow" style="margin-bottom:5px">What I changed when I read it aloud</div>';
+    const eta=el("textarea"); eta.style.minHeight="70px"; edit.appendChild(eta); host.appendChild(edit);
     const b=el("button","btn sm","Mark writing done");
     b.onclick=()=>{ logBlock(n,"writing",{done:true}); markDone(key,b); };
     host.appendChild(b);
@@ -1456,6 +1477,214 @@ const BUILD = {
     b.onclick=()=>{ logBlock(n,"reflect",{done:true}); markDone(key,b); };
     host.appendChild(b);
   }
+};
+
+/* ---- English strands on a weekly rotation -------------------------
+   Reading keeps 10 minutes every day. The other 10 rotates so each
+   strand gets a real block once a week instead of three rushed minutes
+   daily: Mon vocabulary, Tue spelling, Wed sentence structure,
+   Thu vocabulary applied + roots, Fri grammar. */
+
+// Which English skill belongs to this weekday? 0 = Monday.
+function engSlot(n){
+  return ["vocab","spelling","sentence","vocabuse","grammar"][dowOf(n)] || "vocab";
+}
+
+// The same six questions after every reading — the week's passage or their own
+// book, it makes no difference. The point is that it becomes automatic: by
+// December they should be asking these unprompted, which is exactly why the
+// frame never varies.
+function comprehensionFrame(host, what){
+  const wrap = el("details");
+  wrap.style.cssText = "margin-top:16px;border-top:1px solid var(--rule-soft);padding-top:12px";
+  wrap.open = true;
+  const sum = el("summary");
+  sum.style.cssText = "cursor:pointer;font-weight:600;font-size:14.5px;margin-bottom:8px";
+  sum.textContent = "The six questions — answer these about " + what;
+  wrap.appendChild(sum);
+  COMPREHENSION.forEach((c) => {
+    const d = el("div");
+    d.style.margin = "10px 0";
+    d.innerHTML = '<div style="font-weight:600;font-size:14.5px">' + esc(c.q) + '</div>' +
+      '<div class="muted" style="font-size:12.5px;margin:2px 0 5px">' + esc(c.h) + '</div>';
+    const ta = el("textarea");
+    ta.style.minHeight = (c.k === "evid" || c.k === "infer" || c.k === "main") ? "68px" : "44px";
+    d.appendChild(ta);
+    wrap.appendChild(d);
+  });
+  host.appendChild(wrap);
+}
+
+// Shared: a list of prompts, each with its own box and a reference answer.
+function promptList(host, items, opts){
+  const o = opts || {};
+  items.forEach((it, i) => {
+    const d = el("div"); d.style.margin = "14px 0";
+    d.innerHTML = '<div style="font-weight:600;font-size:15px;margin-bottom:5px">' +
+      (o.numbered ? '<span class="mono muted">' + (i + 1) + '.</span> ' : "") + it.q + '</div>' +
+      (it.h ? '<div class="muted" style="font-size:13px;margin-bottom:6px">' + esc(it.h) + '</div>' : "");
+    const ta = el("textarea");
+    ta.style.minHeight = o.short ? "52px" : "76px";
+    if (o.placeholder) ta.placeholder = o.placeholder;
+    d.appendChild(ta);
+    if (it.a) {
+      const sh = el("button", "btn sm ghost", o.revealLabel || "Compare with a good answer");
+      sh.style.marginTop = "6px";
+      const ans = el("div", "result");
+      sh.onclick = () => { ans.className = "result show part"; ans.textContent = it.a; };
+      d.appendChild(sh); d.appendChild(ans);
+    }
+    host.appendChild(d);
+  });
+}
+
+BUILD.vocab = function (host, { n, key }) {
+  const V = vocabWeek(weekOf(n));
+  host.appendChild(el("div", "example eng",
+    '<h4>This week&rsquo;s words &middot; ' + esc(V.theme) + '</h4>' +
+    '<p>Eight words. For each one: say what it means <b>in your own words</b>, write a sentence, then give a word that means the same and one that means the opposite. ' +
+    'Write yours first — comparing your wording to a good one teaches far more than copying it down.</p>'));
+
+  V.words.forEach((w, i) => {
+    const card = el("div", "root");
+    card.style.gridTemplateColumns = "1fr";
+    card.innerHTML = '<div class="row" style="justify-content:space-between;align-items:baseline">' +
+      '<b style="font-size:18px">' + esc(w.w) + '</b>' +
+      '<span class="mono muted" style="font-size:12px">' + (i + 1) + ' of ' + V.words.length + '</span></div>';
+    const ta = el("textarea");
+    ta.style.minHeight = "60px";
+    ta.placeholder = "My meaning · my sentence · same as · opposite of";
+    card.appendChild(ta);
+    const sh = el("button", "btn sm ghost", "Check it");
+    sh.style.marginTop = "7px";
+    const ans = el("div", "result");
+    sh.onclick = () => {
+      ans.className = "result show part";
+      ans.textContent = "Meaning: " + w.d + "   ·   Same as: " + w.s + "   ·   Opposite: " + w.a;
+    };
+    card.appendChild(sh); card.appendChild(ans);
+    host.appendChild(card);
+  });
+
+  const b = el("button", "btn sm", "Mark vocabulary done");
+  b.style.marginTop = "12px";
+  b.onclick = () => { logBlock(n, "vocab", { done: true, words: V.words.length }); markDone(key, b); };
+  host.appendChild(b);
+};
+
+BUILD.vocabuse = function (host, { n, wk, key }) {
+  const V = vocabWeek(weekOf(n));
+  const list = V.words.map((w) => w.w).join(" · ");
+  host.appendChild(el("div", "example eng",
+    '<h4>Use them &middot; ' + esc(V.theme) + '</h4>' +
+    '<p><b>' + esc(list) + '</b></p>' +
+    '<p>Knowing a word means being able to <i>use</i> it. Write one short paragraph that uses at least <b>five</b> of this week&rsquo;s words and still makes sense. Forcing all eight in usually makes it worse.</p>'));
+  const ta = el("textarea");
+  ta.style.minHeight = "150px";
+  ta.placeholder = "One paragraph, five or more of the words.";
+  host.appendChild(ta);
+
+  // The roots belong here: they are how you decode words nobody taught you.
+  if (wk.roots && wk.roots.length) {
+    host.appendChild(el("p", "eyebrow", "Word building — the roots behind hundreds more"));
+    const box = el("div", "roots");
+    wk.roots.forEach(([rt, mean, ex]) => {
+      box.appendChild(el("div", "root", '<b>' + esc(rt) + '</b><span class="mean">' + esc(mean) + '</span>' +
+        '<span class="ex">' + ex.map(esc).join(" &middot; ") + '</span>'));
+    });
+    host.appendChild(box);
+  }
+  const b = el("button", "btn sm", "Mark done");
+  b.style.marginTop = "12px";
+  b.onclick = () => { logBlock(n, "vocabuse", { done: true }); markDone(key, b); };
+  host.appendChild(b);
+};
+
+BUILD.spelling = function (host, { n, key }) {
+  const S = spellingWeek(weekOf(n));
+  host.appendChild(el("div", "example eng",
+    '<h4>' + esc(S.pat) + '</h4><p>' + S.rule + '</p>'));
+
+  const grid = el("div", "roots");
+  grid.style.gridTemplateColumns = "repeat(auto-fill,minmax(120px,1fr))";
+  S.words.forEach((w) => {
+    const c = el("div", "root");
+    c.style.gridTemplateColumns = "1fr";
+    c.style.padding = "9px 12px";
+    c.innerHTML = '<b style="font-size:15px">' + esc(w) + '</b>';
+    grid.appendChild(c);
+  });
+  host.appendChild(grid);
+
+  host.appendChild(el("p", "muted",
+    "Copy each word once, saying it as you write. Then cover the list and write them from memory — the covering is the part that works."));
+  const ta = el("textarea");
+  ta.style.minHeight = "110px";
+  ta.placeholder = "Write the words from memory here, then uncover and mark them.";
+  host.appendChild(ta);
+
+  const b = el("button", "btn sm", "Mark spelling done");
+  b.style.marginTop = "12px";
+  b.onclick = () => { logBlock(n, "spelling", { done: true }); markDone(key, b); };
+  host.appendChild(b);
+};
+
+BUILD.sentence = function (host, { n, key }) {
+  const S = sentenceWeek(weekOf(n));
+  host.appendChild(el("div", "example eng", '<h4>' + esc(S.t) + '</h4><p>' + S.rule + '</p>'));
+  promptList(host, S.items.map((it) => ({ q: esc(it[0]), a: it[1] })), { numbered: true, short: true });
+  const b = el("button", "btn sm", "Mark sentence work done");
+  b.style.marginTop = "10px";
+  b.onclick = () => { logBlock(n, "sentence", { done: true }); markDone(key, b); };
+  host.appendChild(b);
+};
+
+BUILD.grammar = function (host, { n, key }) {
+  const G = grammarWeek(weekOf(n));
+  host.appendChild(el("div", "example eng", '<h4>' + esc(G.t) + '</h4><p>' + G.rule + '</p>'));
+  promptList(host, G.items.map((it) => ({ q: esc(it[0]), a: it[1] })), { numbered: true, short: true });
+  const b = el("button", "btn sm", "Mark grammar done");
+  b.style.marginTop = "10px";
+  b.onclick = () => { logBlock(n, "grammar", { done: true }); markDone(key, b); };
+  host.appendChild(b);
+};
+
+// Sunday: does the spelling actually stick, and are last week's words still there?
+BUILD.dictation = function (host, { n, key }) {
+  const w = weekOf(n);
+  const S = spellingWeek(w), V = vocabWeek(w);
+  host.appendChild(el("div", "example eng",
+    '<h4>Dictation &middot; ' + esc(S.pat) + '</h4>' +
+    '<p>Have someone read these aloud in any order while you write them. Do not look first — a test you can see is not a test.</p>'));
+  const ta = el("textarea");
+  ta.style.minHeight = "120px";
+  ta.placeholder = "Write each word as it is read to you.";
+  host.appendChild(ta);
+  const sh = el("button", "btn sm ghost", "Show the list to mark against");
+  sh.style.marginTop = "8px";
+  const ans = el("div", "result");
+  sh.onclick = () => { ans.className = "result show part"; ans.textContent = S.words.join("   ·   "); };
+  host.appendChild(sh); host.appendChild(ans);
+
+  host.appendChild(el("p", "eyebrow", "And the words — meanings from memory"));
+  const r = rng(seedFor(n, "vocabcheck"));
+  const picks = [];
+  const pool = V.words.slice();
+  for (let i = 0; i < 3 && pool.length; i++) picks.push(pool.splice(ri(r, 0, pool.length - 1), 1)[0]);
+  picks.forEach((w2) => {
+    const d = el("div"); d.style.margin = "9px 0";
+    d.innerHTML = '<div style="font-size:14.5px;margin-bottom:5px">What does <b>' + esc(w2.w) + '</b> mean?</div>';
+    const sh2 = el("button", "btn sm ghost", "Reveal");
+    const a2 = el("span"); a2.style.marginLeft = "10px"; a2.style.fontWeight = "600";
+    sh2.onclick = () => { a2.textContent = w2.d; };
+    d.appendChild(sh2); d.appendChild(a2);
+    host.appendChild(d);
+  });
+
+  const b = el("button", "btn sm", "Mark the check done");
+  b.style.marginTop = "12px";
+  b.onclick = () => { logBlock(n, "dictation", { done: true }); markDone(key, b); };
+  host.appendChild(b);
 };
 
 function logBlock(n,kind,data){
