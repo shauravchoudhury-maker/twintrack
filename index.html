@@ -169,6 +169,13 @@ textarea{width:100%;font-family:var(--f-body);font-size:15px;line-height:1.6;pad
 .result.show{display:block}
 .result.pass{background:var(--good-soft);color:var(--good)}
 .result.part{background:var(--warn-soft);color:var(--warn)}
+/* Worked reasoning, shown under a problem only once it has been missed. */
+.why{display:none;margin:2px 0 12px 31px;padding:11px 14px;border-left:3px solid var(--warn);
+  background:var(--warn-soft);border-radius:0 8px 8px 0}
+.why.show{display:block}
+.why-h{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--warn);margin-bottom:5px}
+.why-b{font-family:var(--f-mono);font-size:13.5px;line-height:1.65;white-space:pre-wrap;color:var(--ink)}
+@media(max-width:560px){ .why{margin-left:0} }
 
 /* ---- progress / plan ---- */
 .grid15{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
@@ -672,114 +679,310 @@ const SHAPES = {
 /* ============================================================
    MATH GENERATORS — one per week; each returns {q, a}
    ============================================================ */
+const NL = String.fromCharCode(10);   // explanations are laid out over lines
+const lcm = (a,b) => a*b/gcd(a,b);
+
+// How an answer should be WRITTEN back to the student. Rounding 7/12 to 0.58
+// would both misstate the answer and fail the checker, which compares values
+// to six decimal places — so anything that is not an exact two-place decimal
+// is shown as the fraction it actually is.
+function showAns(a, q){
+  if(typeof a!=="number") return String(a);
+  if(Number.isInteger(a)) return String(a);
+  const wantsFrac = /lowest terms|fraction|\//.test(q||"");
+  const exact2dp = Math.abs(a*100-Math.round(a*100))<1e-9;
+  if(!wantsFrac && exact2dp) return String(round2(a));
+  for(let d=2; d<=144; d++){
+    const n=a*d;
+    if(Math.abs(n-Math.round(n))<1e-9) return mixedStr(Math.round(n),d);
+  }
+  return exact2dp ? String(round2(a)) : String(Math.round(a*1000)/1000);
+}
+// "11/12", or "7/4 (1 3/4)" when it is worth also seeing as a mixed number.
+function fracFull(n,d){
+  const [a,b]=frac(n,d);
+  if(b===1) return String(a);
+  return a>b ? a+"/"+b+" ("+mixedStr(a,b)+")" : a+"/"+b;
+}
+function simpNote(n,d){
+  const [a,b]=frac(n,d);
+  return (a!==n) ? " That simplifies to "+fracFull(a,b)+"." : "";
+}
+const PLACE_NAMES = ["ones","tens","hundreds","thousands"];
+
 const GEN = {
   placevalue(r){
     const t = ri(r,0,2);
     const d = [ri(r,1,9),ri(r,0,9),ri(r,0,9),ri(r,0,9),ri(r,0,9)];
     const num = d[0]+d[1]+"."+d[2]+d[3]+d[4];
-    if(t===0){ const places=[["tenths",d[2],.1],["hundredths",d[3],.01],["thousandths",d[4],.001]]; const p=pick(r,places);
-      return { q:"In "+num+", what is the value of the digit in the "+p[0]+" place?", a:round2(p[1]*p[2]*1000)/1000 }; }
+    if(t===0){
+      const places=[["tenths",d[2],.1],["hundredths",d[3],.01],["thousandths",d[4],.001]];
+      const p=pick(r,places);
+      const val=round2(p[1]*p[2]*1000)/1000;
+      return { q:"In "+num+", what is the value of the digit in the "+p[0]+" place?", a:val,
+        why:"Find the "+p[0]+" digit in "+num+" — it is "+p[1]+". A digit in the "+p[0]+" place is worth that many "+p[0]+
+            ", so "+p[1]+" × "+p[2]+" = "+val+". The answer is the digit's VALUE, not the digit itself." };
+    }
     if(t===1){
-      // Vary BOTH places. With the tens/ones pair fixed the answer is always
-      // 10, and they learn to type 10 without reading the question.
-      const names=["ones","tens","hundreds","thousands"];
-      const b=ri(r,1,9), hi=ri(r,1,3), lo=ri(r,0,hi-1);
-      return { q:"A "+b+" in the "+names[hi]+" place is worth how many times a "+b+" in the "+names[lo]+" place?",
-               a:Math.pow(10,hi-lo) }; }
-    const a1=d[0]+d[1]+"."+d[2]+d[3], a2=d[0]+d[1]+"."+d[2]+ri(r,0,9);
-    return { q:"Which is greater, "+a1+" or "+a2+"? Type the greater number.", a:Math.max(parseFloat(a1),parseFloat(a2)) };
+      const b=ri(r,1,9), hi=ri(r,1,3), lo=ri(r,0,hi-1), steps=hi-lo, ans=Math.pow(10,steps);
+      return { q:"A "+b+" in the "+PLACE_NAMES[hi]+" place is worth how many times a "+b+" in the "+PLACE_NAMES[lo]+" place?",
+        a:ans,
+        why:"Each step to the LEFT multiplies a digit's value by 10. From "+PLACE_NAMES[lo]+" to "+PLACE_NAMES[hi]+
+            " is "+steps+" step"+(steps>1?"s":"")+", so the value is multiplied by 10"+
+            (steps>1?(" "+steps+" times: "+Array(steps).fill("10").join(" × ")+" = "+ans):" = 10")+"." };
+    }
+    // Both strings share every digit except the hundredths, so compare the
+    // STRINGS — parseFloat("12.00") is 12, and reading digits back off that
+    // number would break.
+    let h2=ri(r,0,9); if(h2===d[3]) h2=(d[3]+1)%10;
+    const a1=d[0]+d[1]+"."+d[2]+d[3], a2=d[0]+d[1]+"."+d[2]+h2;
+    const bigger = d[3]>h2 ? a1 : a2, smaller = d[3]>h2 ? a2 : a1;
+    return { q:"Which is greater, "+a1+" or "+a2+"? Type the greater number.", a:parseFloat(bigger),
+      why:"Compare place by place from the LEFT — never by how long the number looks."+NL+
+          "Both start "+a1.slice(0,4)+"… and agree all the way to the tenths, so it is decided in the hundredths place: "+
+          bigger.slice(-1)+" beats "+smaller.slice(-1)+". So "+bigger+" is greater." };
   },
+
   powers(r){
     const t=ri(r,0,2);
-    if(t===0){ const b=round2(ri(r,11,99)/10), e=ri(r,1,3);
-      return { q:b+" x 10^"+e+" = ?", a:round2(b*Math.pow(10,e)) }; }
-    if(t===1){ const b=ri(r,100,9999)/10, e=ri(r,1,2);
-      return { q:round2(b)+" / 10^"+e+" = ?", a:round2(b/Math.pow(10,e)*100)/100 }; }
-    const n=(ri(r,1,9))+"."+ri(r,0,9)+ri(r,0,9)+ri(r,0,9), place=pick(r,[["tenth",10],["hundredth",100]]);
-    return { q:"Round "+n+" to the nearest "+place[0]+".", a:Math.round(parseFloat(n)*place[1])/place[1] };
+    if(t===0){
+      const b=round2(ri(r,11,99)/10), e=ri(r,1,3), ans=round2(b*Math.pow(10,e));
+      return { q:b+" × 10^"+e+" = ?", a:ans,
+        why:"10^"+e+" means 10 multiplied "+e+" time"+(e>1?"s":"")+" = "+Math.pow(10,e)+
+            ". Multiplying by 10 moves every digit one place LEFT, so the decimal point appears to move "+e+
+            " place"+(e>1?"s":"")+" right: "+b+" → "+ans+"." };
+    }
+    if(t===1){
+      const b=round2(ri(r,100,9999)/10), e=ri(r,1,2), ans=round2(b/Math.pow(10,e)*100)/100;
+      return { q:b+" ÷ 10^"+e+" = ?", a:ans,
+        why:"Dividing by 10 moves every digit one place RIGHT — the opposite of multiplying. Here you divide by "+
+            Math.pow(10,e)+", so the decimal point moves "+e+" place"+(e>1?"s":"")+" left: "+b+" → "+ans+"." };
+    }
+    const n=(ri(r,1,9))+"."+ri(r,0,9)+ri(r,0,9)+ri(r,0,9);
+    const place=pick(r,[["tenth",10,1],["hundredth",100,2]]);
+    const ans=Math.round(parseFloat(n)*place[1])/place[1];
+    const decider=n.split(".")[1][place[2]];
+    return { q:"Round "+n+" to the nearest "+place[0]+".", a:ans,
+      why:"To round to the nearest "+place[0]+", look at the ONE digit to its right — here that is "+decider+
+          ". "+(+decider>=5 ? decider+" is 5 or more, so round UP." : decider+" is less than 5, so round DOWN (leave the digit as it is).")+
+          " Then drop everything after that place: "+ans+"." };
   },
-  bigmult(r){ const a=ri(r,23,89), b=ri(r,14,79); return { q:a+" x "+b+" = ?", a:a*b }; },
-  bigdiv(r){ const d=ri(r,12,45), q=ri(r,12,89); return { q:(d*q)+" / "+d+" = ?", a:q }; },
+
+  bigmult(r){
+    const a=ri(r,23,89), b=ri(r,14,79);
+    const bT=Math.floor(b/10)*10, bO=b%10;
+    return { q:a+" × "+b+" = ?", a:a*b,
+      why:"Split "+b+" into "+bT+" + "+bO+" and multiply in two parts:\n"+
+          "  "+a+" × "+bO+" = "+(a*bO)+"\n"+
+          "  "+a+" × "+bT+" = "+(a*bT)+"\n"+
+          "  add them: "+(a*bO)+" + "+(a*bT)+" = "+(a*b)+"\n"+
+          "Check it is sensible: about "+Math.round(a/10)*10+" × "+Math.round(b/10)*10+" = "+
+          (Math.round(a/10)*10*Math.round(b/10)*10)+", so "+(a*b)+" is in the right range." };
+  },
+
+  bigdiv(r){
+    const d=ri(r,12,45), q=ri(r,12,89), n=d*q;
+    const qT=Math.floor(q/10)*10, rem=n-d*qT;
+    return { q:n+" ÷ "+d+" = ?", a:q,
+      why:"Estimate first: "+d+" × 10 = "+(d*10)+", and "+d+" × 100 = "+(d*100)+
+          ", so the answer is a two-digit number.\n"+
+          "  "+d+" × "+qT+" = "+(d*qT)+", leaving "+n+" − "+(d*qT)+" = "+rem+"\n"+
+          "  "+d+" × "+(q-qT)+" = "+rem+", exactly\n"+
+          "  so "+qT+" + "+(q-qT)+" = "+q+". Check: "+d+" × "+q+" = "+n+"." };
+  },
+
   decadd(r){
-    const a=ri(r,120,980)/10, b=ri(r,105,890)/100;
-    return r()<.5 ? { q:round2(a)+" + "+round2(b)+" = ?", a:round2(a+b) }
-                  : { q:round2(a)+" - "+round2(b)+" = ?", a:round2(a-b) };
+    const a=round2(ri(r,120,980)/10), b=round2(ri(r,105,890)/100);
+    if(r()<.5) return { q:a+" + "+b+" = ?", a:round2(a+b),
+      why:"Line up the DECIMAL POINTS, not the last digits, and fill the empty places with zeros:\n"+
+          "  "+a.toFixed(2)+"\n+ "+b.toFixed(2)+"\n= "+round2(a+b).toFixed(2)+"\n"+
+          "The most common slip here is lining up the right-hand edges instead." };
+    return { q:a+" − "+b+" = ?", a:round2(a-b),
+      why:"Line up the DECIMAL POINTS and pad with zeros so every column has a digit:\n"+
+          "  "+a.toFixed(2)+"\n− "+b.toFixed(2)+"\n= "+round2(a-b).toFixed(2)+"\n"+
+          "Check by adding back: "+round2(a-b).toFixed(2)+" + "+b.toFixed(2)+" = "+a.toFixed(2)+"." };
   },
+
   decmul(r){
-    if(r()<.5){ const a=ri(r,12,49)/10, b=ri(r,11,29)/10; return { q:round2(a)+" x "+round2(b)+" = ?", a:round2(a*b) }; }
-    const q=ri(r,12,48)/10, d=ri(r,2,9); return { q:round2(q*d)+" / "+d+" = ?", a:round2(q) };
+    if(r()<.5){
+      const a=round2(ri(r,12,49)/10), b=round2(ri(r,11,29)/10);
+      const ai=Math.round(a*10), bi=Math.round(b*10);
+      return { q:a+" × "+b+" = ?", a:round2(a*b),
+        why:"Ignore the decimal points and multiply whole numbers: "+ai+" × "+bi+" = "+(ai*bi)+".\n"+
+            "Now count decimal places in the QUESTION: 1 in "+a+" and 1 in "+b+", so 2 altogether.\n"+
+            "Put 2 decimal places into "+(ai*bi)+": "+round2(a*b)+"." };
+    }
+    const q=round2(ri(r,12,48)/10), d=ri(r,2,9), n=round2(q*d);
+    return { q:n+" ÷ "+d+" = ?", a:q,
+      why:"Divide as usual and keep the decimal point directly above where it sits in "+n+".\n"+
+          "  "+n+" ÷ "+d+" = "+q+"\n"+
+          "Check by multiplying back: "+q+" × "+d+" = "+n+"." };
   },
+
   fracadd(r){
     const d1=pick(r,[2,3,4,5,6,8]); let d2=pick(r,[2,3,4,5,6,8,12]); if(d2===d1) d2=d1===12?8:12;
     const n1=ri(r,1,d1-1), n2=ri(r,1,d2-1);
-    if(r()<.5) return { q:n1+"/"+d1+" + "+n2+"/"+d2+" =  (lowest terms)", a:n1/d1+n2/d2 };
+    const L=lcm(d1,d2), e1=n1*L/d1, e2=n2*L/d2;
+    const head="The denominators are different, so the parts are different sizes and cannot be combined yet. "+d1+" and "+d2+
+      " both divide "+L+", so rewrite both with "+L+" underneath:\n"+
+      "  "+n1+"/"+d1+" = "+e1+"/"+L+"   (× "+(L/d1)+" top and bottom)\n"+
+      "  "+n2+"/"+d2+" = "+e2+"/"+L+"   (× "+(L/d2)+" top and bottom)\n";
+    if(r()<.5) return { q:n1+"/"+d1+" + "+n2+"/"+d2+" =  (lowest terms)", a:n1/d1+n2/d2,
+      why:head+"Now add the NUMERATORS only, keeping "+L+" underneath: "+e1+" + "+e2+" = "+(e1+e2)+
+          ", giving "+(e1+e2)+"/"+L+"."+simpNote(e1+e2,L) };
     const A=n1/d1, B=n2/d2;
-    return A>=B ? { q:n1+"/"+d1+" - "+n2+"/"+d2+" =  (lowest terms)", a:A-B }
-                : { q:n2+"/"+d2+" - "+n1+"/"+d1+" =  (lowest terms)", a:B-A };
+    const big=A>=B?[n1,d1,e1]:[n2,d2,e2], small=A>=B?[n2,d2,e2]:[n1,d1,e1];
+    return { q:big[0]+"/"+big[1]+" − "+small[0]+"/"+small[1]+" =  (lowest terms)", a:Math.abs(A-B),
+      why:head+"Now subtract the NUMERATORS only: "+big[2]+" − "+small[2]+" = "+(big[2]-small[2])+
+          ", giving "+(big[2]-small[2])+"/"+L+"."+simpNote(big[2]-small[2],L) };
   },
+
   fracword(r){
     const d1=pick(r,[3,4,5,6,8]), d2=pick(r,[3,4,5,6,8]);
     const n1=ri(r,1,d1-1), n2=ri(r,1,d2-1);
     const who=pick(r,["Reading","Practice","The walk","The recipe","The project"]);
-    return { q:who+" took "+fracStr(n1,d1)+" of an hour on Monday and "+fracStr(n2,d2)+" of an hour on Tuesday. How much in total? (lowest terms)", a:n1/d1+n2/d2 };
+    const L=lcm(d1,d2), e1=n1*L/d1, e2=n2*L/d2;
+    return { q:who+" took "+fracStr(n1,d1)+" of an hour on Monday and "+fracStr(n2,d2)+
+      " of an hour on Tuesday. How much in total? (lowest terms)", a:n1/d1+n2/d2,
+      why:"\"In total\" means add. Rewrite both fractions over "+L+", the smallest number "+d1+" and "+d2+" both divide:\n"+
+          "  "+n1+"/"+d1+" = "+e1+"/"+L+" and "+n2+"/"+d2+" = "+e2+"/"+L+"\n"+
+          "Add the numerators: "+e1+" + "+e2+" = "+(e1+e2)+", so "+(e1+e2)+"/"+L+"."+simpNote(e1+e2,L)+"\n"+
+          "Sense check: each part is under an hour, so the total should be near "+
+          (n1/d1+n2/d2>=1?"or a little over":"under")+" one hour." };
   },
+
   fracdiv(r){
-    if(r()<.5){ const a=ri(r,2,9), b=ri(r,2,9); return { q:a+" sandwiches shared equally by "+b+" people. How much each? (fraction, lowest terms)", a:a/b }; }
+    if(r()<.5){
+      const a=ri(r,2,9), b=ri(r,2,9);
+      return { q:a+" sandwiches shared equally by "+b+" people. How much each? (fraction, lowest terms)", a:a/b,
+        why:"A fraction IS a division: "+a+" ÷ "+b+" is written "+a+"/"+b+".\n"+
+            "Give everyone one "+b+"th of each sandwich, "+a+" times over, so each person gets "+a+"/"+b+"."+
+            simpNote(a,b)+"\nSense check: "+(a>b?"more sandwiches than people, so each gets more than 1.":
+            a<b?"fewer sandwiches than people, so each gets less than 1.":"equal numbers, so exactly 1 each.") };
+    }
     const d=pick(r,[3,4,5,6,8]), n=ri(r,1,d-1), w=d*ri(r,2,5);
-    return { q:fracStr(n,d)+" x "+w+" = ?", a:n/d*w };
+    return { q:fracStr(n,d)+" × "+w+" = ?", a:n/d*w,
+      why:fracStr(n,d)+" of "+w+" means: split "+w+" into "+d+" equal parts, then take "+n+" of them.\n"+
+          "  "+w+" ÷ "+d+" = "+(w/d)+"\n  "+(w/d)+" × "+n+" = "+(n/d*w)+"\n"+
+          "Because "+n+"/"+d+" is less than 1, the answer must be smaller than "+w+" — and "+(n/d*w)+" is." };
   },
+
   fracmul(r){
     const d1=pick(r,[2,3,4,5,6]), d2=pick(r,[2,3,4,5,8]);
     const n1=ri(r,1,d1-1), n2=ri(r,1,d2-1);
-    if(r()<.5) return { q:n1+"/"+d1+" x "+n2+"/"+d2+" =  (lowest terms)", a:(n1*n2)/(d1*d2) };
-    return { q:"A rectangle is "+fracStr(n1,d1)+" m by "+fracStr(n2,d2)+" m. What is its area in square metres? (lowest terms)", a:(n1*n2)/(d1*d2) };
+    const top=n1*n2, bot=d1*d2;
+    if(r()<.5) return { q:n1+"/"+d1+" × "+n2+"/"+d2+" =  (lowest terms)", a:top/bot,
+      why:"To multiply fractions you do NOT need a common denominator — that is only for adding.\n"+
+          "  multiply the tops:    "+n1+" × "+n2+" = "+top+"\n"+
+          "  multiply the bottoms: "+d1+" × "+d2+" = "+bot+"\n"+
+          "  giving "+top+"/"+bot+"."+simpNote(top,bot)+"\n"+
+          "Both fractions are less than 1, so the answer is smaller than either of them." };
+    return { q:"A rectangle is "+fracStr(n1,d1)+" m by "+fracStr(n2,d2)+" m. What is its area in square metres? (lowest terms)",
+      a:top/bot,
+      why:"Area is still length × width when the sides are fractions.\n"+
+          "  "+n1+"/"+d1+" × "+n2+"/"+d2+" = ("+n1+"×"+n2+")/("+d1+"×"+d2+") = "+top+"/"+bot+"."+simpNote(top,bot)+"\n"+
+          "Picture a 1 m square cut into "+bot+" equal tiles; the rectangle covers "+top+" of them." };
   },
+
   scaling(r){
     const w=ri(r,12,60), d=pick(r,[3,4,5,8]), n=pick(r,[1,2,3,5,7]);
-    const f=n/d, bigger=f>1;
-    return { q:"Without multiplying: is "+w+" x "+n+"/"+d+" greater or less than "+w+"? Type 1 for greater, 0 for less.", a:bigger?1:0 };
+    const bigger=n/d>1;
+    return { q:"Without multiplying: is "+w+" × "+n+"/"+d+" greater or less than "+w+"? Type 1 for greater, 0 for less.",
+      a:bigger?1:0,
+      why:"Compare the FRACTION to 1, and ignore the "+w+" entirely.\n"+
+          "  "+n+"/"+d+" is "+(bigger?"greater":"less")+" than 1, because "+n+" is "+(bigger?"more":"less")+" than "+d+".\n"+
+          "Multiplying by a number greater than 1 makes things bigger; by a number less than 1 makes them smaller. "+
+          "So the answer is "+(bigger?"greater (1)":"less (0)")+"." };
   },
+
   unitdiv(r){
-    if(r()<.5){ const w=ri(r,2,9), d=pick(r,[2,3,4,5,6,8]); return { q:w+" / (1/"+d+") = ?", a:w*d }; }
-    const d=pick(r,[2,3,4,5]), w=ri(r,2,7); return { q:"(1/"+d+") / "+w+" =  (fraction)", a:1/(d*w) };
+    if(r()<.5){
+      const w=ri(r,2,9), d=pick(r,[2,3,4,5,6,8]);
+      return { q:w+" ÷ (1/"+d+") = ?", a:w*d,
+        why:"Read it as a question: how many "+ordinalFrac(d)+" fit into "+w+"?\n"+
+            "One whole holds "+d+" of them, so "+w+" wholes hold "+w+" × "+d+" = "+(w*d)+".\n"+
+            "Dividing by a fraction smaller than 1 always gives a BIGGER answer — that is the part that feels wrong at first." };
+    }
+    const d=pick(r,[2,3,4,5]), w=ri(r,2,7);
+    return { q:"(1/"+d+") ÷ "+w+" =  (fraction)", a:1/(d*w),
+      why:"Here you are splitting a piece, not counting pieces. Take 1/"+d+" and share it between "+w+" people.\n"+
+          "Each "+ordinalFrac(d)+" breaks into "+w+" smaller pieces, so the whole breaks into "+d+" × "+w+" = "+(d*w)+" of them.\n"+
+          "Each person gets 1/"+(d*w)+" — smaller than 1/"+d+", which makes sense because you shared it out." };
   },
+
   expr(r){
     const t=ri(r,0,2);
-    if(t===0){ const a=ri(r,2,9), b=ri(r,3,15), c=ri(r,2,12); return { q:a+" x ("+b+" + "+c+") = ?", a:a*(b+c) }; }
-    if(t===1){ const a=ri(r,20,80), b=ri(r,2,9), c=ri(r,2,9); return { q:a+" - ("+b+" x "+c+") = ?", a:a-b*c }; }
+    if(t===0){ const a=ri(r,2,9), b=ri(r,3,15), c=ri(r,2,12);
+      return { q:a+" × ("+b+" + "+c+") = ?", a:a*(b+c),
+        why:"Brackets first, always.\n  "+b+" + "+c+" = "+(b+c)+"\n  "+a+" × "+(b+c)+" = "+(a*(b+c))+"\n"+
+            "Doing "+a+" × "+b+" first would give "+(a*b)+", which is a different question." }; }
+    if(t===1){ const a=ri(r,20,80), b=ri(r,2,9), c=ri(r,2,9);
+      return { q:a+" − ("+b+" × "+c+") = ?", a:a-b*c,
+        why:"Brackets first.\n  "+b+" × "+c+" = "+(b*c)+"\n  "+a+" − "+(b*c)+" = "+(a-b*c)+"\n"+
+            "Subtracting left to right first would give "+(a-b)+" × "+c+", which is not what is written." }; }
     const a=ri(r,2,6), b=ri(r,2,6), c=ri(r,2,9), d=ri(r,1,8);
-    return { q:"["+a+" x ("+b+" + "+c+")] - "+d+" = ?", a:a*(b+c)-d };
+    return { q:"["+a+" × ("+b+" + "+c+")] − "+d+" = ?", a:a*(b+c)-d,
+      why:"Work from the INNERMOST bracket outwards.\n  "+b+" + "+c+" = "+(b+c)+"\n  "+a+" × "+(b+c)+" = "+(a*(b+c))+
+          "\n  "+(a*(b+c))+" − "+d+" = "+(a*(b+c)-d) };
   },
+
   coord(r){
     const t=ri(r,0,1), s=ri(r,2,6), st=ri(r,0,4);
-    if(t===0){ const k=ri(r,3,6); return { q:"Rule: start at "+st+", add "+s+" each time. What is term "+k+"? (the start is term 1)", a:st+s*(k-1) }; }
+    if(t===0){ const k=ri(r,3,6);
+      return { q:"Rule: start at "+st+", add "+s+" each time. What is term "+k+"? (the start is term 1)", a:st+s*(k-1),
+        why:"The start is term 1, so by term "+k+" you have added "+s+" only "+(k-1)+" times — not "+k+" times. "+
+            "That off-by-one is the usual trap.\n  "+st+" + ("+s+" × "+(k-1)+") = "+st+" + "+(s*(k-1))+" = "+(st+s*(k-1))+
+            "\n  Listed out: "+Array.from({length:k},(_,i)=>st+s*i).join(", ")+"." }; }
     const x=ri(r,1,9), y=ri(r,1,9);
-    return { q:"Point P is at ("+x+", "+y+"). Move 3 right and 2 up. What is the new x-coordinate?", a:x+3 };
+    return { q:"Point P is at ("+x+", "+y+"). Move 3 right and 2 up. What is the new x-coordinate?", a:x+3,
+      why:"In (x, y) the FIRST number is x, measured along the horizontal axis.\n"+
+          "Right and left change x; up and down change y. Moving 3 right: "+x+" + 3 = "+(x+3)+".\n"+
+          "The 2 up changes y from "+y+" to "+(y+2)+", but the question asked only for x." };
   },
+
   volume(r){
     const t=ri(r,0,2);
-    if(t===0){ const a=ri(r,2,9), b=ri(r,2,9), c=ri(r,2,9); return { q:"A prism is "+a+" by "+b+" by "+c+" cm. Volume in cubic cm?", a:a*b*c }; }
-    if(t===1){ const cm=ri(r,120,940); return { q:"Convert "+cm+" cm to metres.", a:round2(cm/100) }; }
-    const g=ri(r,2,9)*500; return { q:"Convert "+g+" g to kilograms.", a:round2(g/1000) };
+    if(t===0){ const a=ri(r,2,9), b=ri(r,2,9), c=ri(r,2,9);
+      return { q:"A prism is "+a+" by "+b+" by "+c+" cm. Volume in cubic cm?", a:a*b*c,
+        why:"Volume = length × width × height.\n  "+a+" × "+b+" = "+(a*b)+" (that is the area of the base)\n"+
+            "  "+(a*b)+" × "+c+" = "+(a*b*c)+" cubic cm\n"+
+            "Think of "+c+" layers, each holding "+(a*b)+" unit cubes." }; }
+    if(t===1){ const cm=ri(r,120,940);
+      return { q:"Convert "+cm+" cm to metres.", a:round2(cm/100),
+        why:"100 cm make 1 m, so divide by 100 — going to a BIGGER unit always gives a smaller number.\n"+
+            "  "+cm+" ÷ 100 = "+round2(cm/100)+" m\n"+
+            "If you had multiplied you would get "+(cm*100)+" m, which is longer than a football pitch — a useful sense check." }; }
+    const g=ri(r,2,9)*500;
+    return { q:"Convert "+g+" g to kilograms.", a:round2(g/1000),
+      why:"1000 g make 1 kg, so divide by 1000.\n  "+g+" ÷ 1000 = "+round2(g/1000)+" kg\n"+
+          "Grams are smaller than kilograms, so the number must get smaller." };
   }
 };
+function ordinalFrac(d){
+  return ({2:"halves",3:"thirds",4:"quarters",5:"fifths",6:"sixths",8:"eighths"})[d] || (d+"ths");
+}
 
 /* fluency sprints — short, timed, Kumon-style */
 const SPRINT = {
   mult:{ label:"Multiplication & division facts", target:120, make(r){ const a=ri(r,3,12),b=ri(r,3,12);
-    return r()<.65 ? {q:a+" x "+b, a:a*b} : {q:(a*b)+" / "+a, a:b}; } },
+    if(r()<.65) return {q:a+" × "+b, a:a*b, why:a+" × "+b+" = "+(a*b)+". If it did not come instantly, count on from a fact you do know: "+a+" × "+(b-1)+" = "+(a*(b-1))+", then add "+a+"."};
+    return {q:(a*b)+" ÷ "+a, a:b, why:"Division undoes multiplication: ask \"" +a+" times what makes "+(a*b)+"?\" Answer: "+b+", because "+a+" × "+b+" = "+(a*b)+"."}; } },
   div:{ label:"Division facts & remainders", target:135, make(r){ const d=ri(r,3,12), q=ri(r,3,12);
-    return {q:(d*q)+" / "+d, a:q}; } },
-  dec:{ label:"Decimal mental math", target:150, make(r){ const a=ri(r,11,99)/10, b=ri(r,11,99)/10;
-    return r()<.5 ? {q:round2(a)+" + "+round2(b), a:round2(a+b)} : {q:round2(a)+" x 10", a:round2(a*10)}; } },
+    return {q:(d*q)+" ÷ "+d, a:q, why:"Ask \""+d+" times what makes "+(d*q)+"?\" — "+q+", since "+d+" × "+q+" = "+(d*q)+"."}; } },
+  dec:{ label:"Decimal mental math", target:150, make(r){ const a=round2(ri(r,11,99)/10), b=round2(ri(r,11,99)/10);
+    if(r()<.5) return {q:a+" + "+b, a:round2(a+b), why:"Add the whole parts, then the tenths: "+Math.floor(a)+" + "+Math.floor(b)+" = "+(Math.floor(a)+Math.floor(b))+", and the tenths give the rest. Total "+round2(a+b)+"."};
+    return {q:a+" × 10", a:round2(a*10), why:"× 10 moves every digit one place left, so the decimal point appears to shift one right: "+a+" → "+round2(a*10)+"."}; } },
   fracid:{ label:"Equivalent fractions", target:150, make(r){ const d=pick(r,[2,3,4,5,6]), n=ri(r,1,d-1), m=ri(r,2,5);
-    return {q:(n*m)+"/"+(d*m)+" in lowest terms (as a fraction)", a:n/d}; } },
+    return {q:(n*m)+"/"+(d*m)+" in lowest terms (as a fraction)", a:n/d,
+      why:"Find the largest number dividing both "+(n*m)+" and "+(d*m)+" — it is "+m+". Divide top and bottom by "+m+": "+(n*m)+" ÷ "+m+" = "+n+" and "+(d*m)+" ÷ "+m+" = "+d+", giving "+n+"/"+d+"."}; } },
   fracop:{ label:"Fraction operations", target:165, make(r){ const d=pick(r,[2,3,4,5,6,8]), n1=ri(r,1,d-1), n2=ri(r,1,d-1);
-    return {q:n1+"/"+d+" + "+n2+"/"+d+" (lowest terms)", a:(n1+n2)/d}; } },
+    return {q:n1+"/"+d+" + "+n2+"/"+d+" (lowest terms)", a:(n1+n2)/d,
+      why:"The denominators already match, so add the numerators only and keep "+d+" underneath: "+n1+" + "+n2+" = "+(n1+n2)+", giving "+(n1+n2)+"/"+d+"."+simpNote(n1+n2,d)+" Never add the bottoms."}; } },
   mixed:{ label:"Mixed review", target:165, make(r){ const t=ri(r,0,2);
-    if(t===0){ const a=ri(r,4,12),b=ri(r,4,12); return {q:a+" x "+b, a:a*b}; }
-    if(t===1){ const a=ri(r,11,99)/10; return {q:round2(a)+" x 100", a:round2(a*100)}; }
-    const a=ri(r,2,9),b=ri(r,2,9),c=ri(r,2,9); return {q:a+" + "+b+" x "+c, a:a+b*c}; } }
+    if(t===0){ const a=ri(r,4,12),b=ri(r,4,12); return {q:a+" × "+b, a:a*b, why:a+" × "+b+" = "+(a*b)+"."}; }
+    if(t===1){ const a=round2(ri(r,11,99)/10); return {q:a+" × 100", a:round2(a*100), why:"× 100 shifts the decimal point two places right: "+a+" → "+round2(a*100)+"."}; }
+    const a=ri(r,2,9),b=ri(r,2,9),c=ri(r,2,9);
+    return {q:a+" + "+b+" × "+c, a:a+b*c, why:"Multiply before you add: "+b+" × "+c+" = "+(b*c)+", then "+a+" + "+(b*c)+" = "+(a+b*c)+". Adding first would give "+((a+b)*c)+", which is wrong."}; } }
 };
 
 const OWN_BOOK_PROMPTS = [
@@ -1012,6 +1215,7 @@ function markDone(key,el2){
 /* ---------- question list helper ---------- */
 function qlist(host,{key,items,onDone,label}){
   const box=el("div");
+  const whys=[];
   items.forEach((it,i)=>{
     const row=el("div","q");
     row.innerHTML='<span class="qn">'+(i+1)+'</span><span class="qtext"><span class="qmath">'+esc(it.q)+'</span></span>';
@@ -1020,36 +1224,58 @@ function qlist(host,{key,items,onDone,label}){
     inp.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ const nx=box.querySelectorAll("input")[i+1]; if(nx) nx.focus(); else check(); }});
     row.appendChild(inp); row.appendChild(mk);
     box.appendChild(row);
+    // A wrong answer with no explanation teaches nothing, so every problem
+    // carries its own worked reasoning, shown only when it is needed.
+    const w=el("div","why");
+    w.innerHTML='<div class="why-h">How to get there</div><div class="why-b"></div>';
+    box.appendChild(w);
+    whys.push(w);
   });
   host.appendChild(box);
   const res=el("div","result");
   const bar=el("div","row"); bar.style.marginTop="12px";
   const cb=el("button","btn sm",label||"Check answers");
-  const sb=el("button","btn sm ghost","Show answers");
+  const sb=el("button","btn sm ghost","Show worked answers");
   bar.appendChild(cb); bar.appendChild(sb);
   host.appendChild(bar); host.appendChild(res);
+
+  function reveal(i){
+    const it=items[i], w=whys[i];
+    if(!it.why){ w.classList.remove("show"); return; }
+    const NL2=String.fromCharCode(10);
+    w.querySelector(".why-b").textContent = it.why + NL2 + NL2 + "Answer: " + showAns(it.a, it.q);
+    w.classList.add("show");
+  }
 
   function check(){
     const ins=box.querySelectorAll("input"); let got=0;
     ins.forEach((inp,i)=>{
+      const tried=inp.value.trim()!=="";
       const ok=correct(inp.value,items[i].a);
-      inp.classList.toggle("ok",ok); inp.classList.toggle("no",!ok&&inp.value.trim()!=="");
-      const mk=inp.nextSibling; mk.textContent = ok?"✓":(inp.value.trim()?"✗":"");
+      inp.classList.toggle("ok",ok); inp.classList.toggle("no",!ok&&tried);
+      const mk=inp.nextSibling; mk.textContent = ok?"✓":(tried?"✗":"");
       mk.style.color = ok?"var(--good)":"var(--warn)";
-      if(ok) got++;
+      if(ok){ got++; whys[i].classList.remove("show"); }
+      else if(tried){ reveal(i); }     // explain only what they actually got wrong
+      if(ok) inp.setAttribute("readonly","readonly"); else inp.removeAttribute("readonly");
     });
     const pct=Math.round(got/items.length*100);
+    const wrong=items.length-got;
     res.className="result show "+(pct>=80?"pass":"part");
     res.textContent = got+" of "+items.length+" correct ("+pct+"%). "+
-      (pct>=80?"That is mastery — move on.":"Fix the ones marked with a cross, then check again.");
+      (got===items.length ? "All correct — move on."
+       : pct>=80 ? "That is mastery. Read the working under the "+wrong+" you missed before you move on."
+       : "Read the working under each one you missed, then try those again — the numbers stay the same.");
     if(onDone) onDone(got,items.length,cb);
     return got;
   }
   cb.onclick=check;
   sb.onclick=()=>{ const ins=box.querySelectorAll("input");
-    ins.forEach((inp,i)=>{ const a=items[i].a;
-      inp.value = typeof a==="number" ? (Number.isInteger(a)?a:round2(a)) : a; inp.classList.remove("no"); });
-    res.className="result show part"; res.textContent="Answers filled in. Work back through any you did not get — that is where the learning is.";
+    ins.forEach((inp,i)=>{
+      inp.value = showAns(items[i].a, items[i].q);
+      inp.classList.remove("no"); reveal(i); });
+    res.className="result show part";
+    res.textContent="Every one worked through below. Copying the answer down does nothing — read the steps, then come back tomorrow and try the same kind again.";
   };
   return {check};
 }
