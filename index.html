@@ -1857,6 +1857,9 @@ function parentCard(kid){
     cell("Lesson", kid.lesson+" <span style='font-size:15px;color:var(--ink-3)'>/ "+TOTAL_DAYS+"</span>",
          "Week "+a.week+(a.behind>0?" · "+a.behind+" behind":a.behind<0?" · "+(-a.behind)+" ahead":" · on the day"))+
     cell("Streak", a.idle!==null&&a.idle>=2 ? "0" : String(kid.streak),
+         // `idle` measures the last WRITE, and setting a device up is a write —
+         // so before any lesson is finished it says nothing about being active.
+         !a.sessions ? "not begun" :
          a.idle===null?"—":a.idle===0?"active today":a.idle===1?"last active yesterday":"last active "+a.idle+" days ago")+
     cell("Math accuracy", a.accAll===null?"—":a.accAll+"%",
          a.accRecent===null?"no sessions yet":"last 7 sessions: "+a.accRecent+"%")+

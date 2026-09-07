@@ -10,7 +10,7 @@
 // ten-minute-old files under a brand new cache name and the app stays stale
 // even though the version bumped.
 
-const CACHE = "twintrack-v6";
+const CACHE = "twintrack-v7";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"];
 const NET_TIMEOUT_MS = 3000;
