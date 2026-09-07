@@ -85,7 +85,8 @@ button{font-family:inherit;font-size:inherit;cursor:pointer}
 .syncdot.idle{background:var(--sunk);color:var(--ink-3)}
 .pstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px 18px;margin-top:16px}
 .flags{list-style:none;padding:0;margin:16px 0 0;display:flex;flex-direction:column;gap:7px}
-.flag{font-size:14px;padding:8px 12px;border-radius:7px;border-left:3px solid var(--rule)}
+.flag{font-size:14px;padding:8px 12px;border-radius:7px;border-left:3px solid var(--rule);background:var(--sunk);color:var(--ink-2)}
+.pill:not(.good):not(.warn):not(.math):not(.eng){background:var(--sunk);color:var(--ink-3)}
 .flag.good{background:var(--good-soft);color:var(--good);border-left-color:var(--good)}
 .flag.warn{background:var(--warn-soft);color:var(--warn);border-left-color:var(--warn)}
 .flag.bad{background:var(--warn-soft);color:var(--warn);border-left-color:var(--warn);font-weight:600}
@@ -1793,7 +1794,10 @@ function analyse(kid){
   else if(behind>=3) flags.push({level:"warn", text:behind+" lessons behind the calendar"});
   const lowChecks=checks.slice(-2).filter(c=>c.pct<80);
   if(lowChecks.length===2) flags.push({level:"warn", text:"Two Sunday checks in a row under 80% — repeat the week rather than advancing"});
-  if(!flags.length && keys.length) flags.push({level:"good", text:"On track — nothing needs your attention"});
+  // A child with no finished lessons is not "on track" — they have not begun.
+  if(!keys.length) flags.push({level:"none",
+    text:"No lessons finished yet. This record appeared when the iPad was set up."});
+  else if(!flags.length) flags.push({level:"good", text:"On track — nothing needs your attention"});
 
   return { keys, mathAll, mathRecent, sprintTimes, checks, expected, behind, idle,
            accAll:pctOf(mathAll), accRecent, sprintTrend, flags,
@@ -1839,9 +1843,10 @@ function parentCard(kid){
   const card=el("div","card");
   const head=el("div","row");
   head.innerHTML='<h2 style="font-size:21px;margin:0;flex:1">'+esc(kid.name)+'</h2>';
-  const worst=a.flags.reduce((w,f)=>f.level==="bad"?"bad":(w==="bad"?"bad":f.level),"good");
-  head.appendChild(el("span","pill "+(worst==="bad"?"warn":worst==="warn"?"warn":"good"),
-    worst==="good"?"On track":worst==="warn"?"Worth a look":"Needs attention"));
+  const worst = !a.sessions ? "none"
+    : a.flags.reduce((w,f)=>f.level==="bad"?"bad":(w==="bad"?"bad":f.level),"good");
+  head.appendChild(el("span","pill "+(worst==="none"?"":worst==="good"?"good":"warn"),
+    worst==="none"?"Not started" : worst==="good"?"On track" : worst==="warn"?"Worth a look":"Needs attention"));
   card.appendChild(head);
 
   const stats=el("div","pstats");
