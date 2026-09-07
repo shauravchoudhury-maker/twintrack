@@ -1117,9 +1117,13 @@ const ENG_SLOTS = {
 };
 function shapeOf(n){
   const d = dowOf(n);
-  if (d === 5) return SHAPES.saturday;
-  if (d === 6) return SHAPES.sunday;
-  return SHAPES.weekday.concat([ENG_SLOTS[engSlot(n)]]);
+  const off = { k:"engoffline", t:"Extra Reading", s:"Today's word work could not load", m:10, strand:"eng" };
+  // The stand-in inherits the length of whatever it replaces, so a degraded
+  // day is still a full 45 minutes rather than a short one.
+  const sub = (b) => Object.assign({}, off, { m: b.m });
+  if (d === 5) return engLoaded() ? SHAPES.saturday : SHAPES.saturday.map(b => b.k === "writing" ? sub(b) : b);
+  if (d === 6) return engLoaded() ? SHAPES.sunday : SHAPES.sunday.map(b => b.k === "dictation" ? sub(b) : b);
+  return SHAPES.weekday.concat([ engLoaded() ? ENG_SLOTS[engSlot(n)] : off ]);
 }
 const DOW = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 function dateOfLesson(n){ const d=new Date(START); d.setDate(d.getDate()+(n-1)); return d; }
@@ -1419,7 +1423,12 @@ const BUILD = {
   writing(host,{n,wk,key}){
     host.appendChild(el("div","example eng",'<h4>This week’s piece</h4><p>'+esc(wk.write)+'</p>'));
     host.appendChild(el("p","muted","Build the paragraph one part at a time. Each box is a job, and the closing sentence is the one people skip."));
-    PARAGRAPH.forEach((sec,i)=>{
+    (typeof PARAGRAPH !== "undefined" ? PARAGRAPH : [
+      {k:"topic",t:"Topic sentence",h:"One sentence saying what this paragraph is about."},
+      {k:"detail",t:"Details",h:"Two or three sentences developing it."},
+      {k:"example",t:"Examples",h:"Proof — a quotation, a fact, something that happened."},
+      {k:"closing",t:"Closing sentence",h:"Round it off; do not just repeat the opening."},
+    ]).forEach((sec,i)=>{
       const d=el("div"); d.style.margin="14px 0";
       d.innerHTML='<div class="eyebrow" style="margin-bottom:4px">'+(i+1)+' &middot; '+esc(sec.t)+'</div>'+
         '<div class="muted" style="font-size:13px;margin-bottom:6px">'+esc(sec.h)+'</div>';
@@ -1486,6 +1495,36 @@ const BUILD = {
    Thu vocabulary applied + roots, Fri grammar. */
 
 // Which English skill belongs to this weekday? 0 = Monday.
+
+/* ---- Degrading safely when english.js does not arrive ---------------
+   Splitting the English content into a second file introduced a failure
+   the single-file version could not have: on a flaky connection
+   index.html can load while english.js does not, leaving VOCAB and the
+   rest undefined and throwing the moment a word-work block renders.
+   A child on an iPad with no adult nearby would just see a dead screen.
+   So every block that depends on that file checks first, and the day
+   falls back to reading — which needs no data at all. */
+function engLoaded(){
+  return typeof VOCAB !== "undefined" && typeof SPELLING !== "undefined"
+      && typeof SENTENCE !== "undefined" && typeof GRAMMAR !== "undefined"
+      && typeof COMPREHENSION !== "undefined" && typeof PARAGRAPH !== "undefined";
+}
+
+BUILD.engoffline = function (host, { n, key }) {
+  host.appendChild(el("div", "example eng",
+    "<h4>Today's word work could not load</h4>" +
+    "<p>The vocabulary and spelling file did not download — almost always a wifi problem, not a fault with your work. " +
+    "Everything you have already done is safe.</p>" +
+    "<p><b>Reconnect to wifi and reopen the app</b> and it will come back. In the meantime, read for the full ten minutes " +
+    "instead — that is never wasted.</p>"));
+  const ta = el("textarea");
+  ta.placeholder = "What did you read, and what happened in it?";
+  host.appendChild(ta);
+  const b = el("button", "btn sm", "Mark reading done");
+  b.style.marginTop = "10px";
+  b.onclick = function () { logBlock(n, "engoffline", { done: true }); markDone(key, b); };
+  host.appendChild(b);
+};
 function engSlot(n){
   return ["vocab","spelling","sentence","vocabuse","grammar"][dowOf(n)] || "vocab";
 }
@@ -1495,6 +1534,7 @@ function engSlot(n){
 // December they should be asking these unprompted, which is exactly why the
 // frame never varies.
 function comprehensionFrame(host, what){
+  if (typeof COMPREHENSION === "undefined") return;   // reading still works without it
   const wrap = el("details");
   wrap.style.cssText = "margin-top:16px;border-top:1px solid var(--rule-soft);padding-top:12px";
   wrap.open = true;
