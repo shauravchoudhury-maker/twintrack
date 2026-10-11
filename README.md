@@ -1,6 +1,6 @@
 # Twin Track
 
-A 15-week daily math and English plan for two Grade 5 students — 45 minutes a day,
+A 15-week daily math and English plan for two Grade 5 students — 45–55 minutes a day,
 7 September to 20 December.
 
 Runs entirely in the browser. No account, no server, no data leaves the device.
@@ -46,6 +46,22 @@ outside program:
 | 13–14 | Expressions, order of operations, patterns, coordinate plane | 5.OA, 5.G.A |
 | 15 | Volume, measurement conversion, 2-D hierarchy | 5.M, 5.G.B |
 
+**Pre-algebra** — Monday, Wednesday and Friday from week 6, 10 minutes: the
+Grade 5 expressions work (5.OA) carried forward into the Grade 6 on-ramp (6.EE).
+
+| Week | Unit |
+|---|---|
+| 6 | Unknowns and letters |
+| 7–8 | Balancing equations: + and −, then × and ÷ |
+| 9–10 | Evaluating expressions; turning words into expressions |
+| 11 | The distributive property and like terms |
+| 12 | Input–output rules, forwards and backwards |
+| 13 | Two-step equations |
+| 14 | Patterns and the nth term |
+| 15 | Inequalities and equation word problems |
+
+From week 6, two of the ten Sunday-check problems are pre-algebra.
+
 **English** — every day, in parallel: reading (15 original passages alternating
 literature and informational), 45 Greek and Latin roots, a grammar point a week,
 and a long writing piece each Saturday.
@@ -54,7 +70,8 @@ and a long writing piece each Saturday.
 
 | Day | Blocks | Math | English |
 |---|---|---|---|
-| Mon–Fri | Sprint, Math Focus, Spiral Review, Reading, Roots, Sentence Work | 25 min | 20 min |
+| Mon, Wed, Fri | Sprint, Math Focus, Spiral Review, Pre-Algebra (from week 6), Reading, Word Work | 35 min | 20 min |
+| Tue, Thu | Sprint, Math Focus, Spiral Review, Reading, Word Work | 25 min | 20 min |
 | Saturday | Sprint, Math Focus, Writing Studio, Roots | 15 min | 30 min |
 | Sunday | Mastery Check, Error Fix, Free Reading, Week Review | 25 min | 20 min |
 
@@ -69,6 +86,10 @@ Sunday deliberately introduces nothing new.
   retries are unlimited.
 - **Spiral review and root retrieval** pull from weeks already completed —
   spaced retrieval practice rather than re-reading.
+- **Every problem carries its own worked solution** — the steps (HOW), the idea
+  that makes each step allowed (WHY), and a check that puts the answer back in.
+  A wrong answer opens its working automatically; a right one gets a
+  *See how & why* link, because a right answer can still be a lucky guess.
 - Answers accept `3/4`, `6/8` and `0.75` as the same value.
 
 ## Checking progress remotely

@@ -1,7 +1,7 @@
 {
   "name": "Twin Track",
   "short_name": "Twin Track",
-  "description": "A 15-week daily math and English plan for two Grade 5 students — 45 minutes a day.",
+  "description": "A 15-week daily math and English plan for two Grade 5 students — 45–55 minutes a day.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

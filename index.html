@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Twin Track</title>
-<meta name="description" content="A 15-week daily math and English plan for two Grade 5 students — 45 minutes a day.">
+<meta name="description" content="A 15-week daily math and English plan for two Grade 5 students — 45–55 minutes a day.">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#FAFAF8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14181D" media="(prefers-color-scheme: dark)">
@@ -175,6 +175,12 @@ textarea{width:100%;font-family:var(--f-body);font-size:15px;line-height:1.6;pad
 .why{display:none;margin:2px 0 12px 31px;padding:11px 14px;border-left:3px solid var(--warn);
   background:var(--warn-soft);border-radius:0 8px 8px 0}
 .why.show{display:block}
+.why.calm{border-left-color:var(--good);background:var(--sunk)}
+.why.calm .why-h{color:var(--good)}
+.whytoggle{display:none;margin:-4px 0 10px 31px;padding:3px 0;border:0;background:none;
+  font:inherit;font-size:13px;font-weight:600;color:var(--good);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.whytoggle.show{display:inline-block}
+@media(max-width:560px){ .whytoggle{margin-left:0} }
 .why-h{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--warn);margin-bottom:5px}
 .why-b{font-family:var(--f-mono);font-size:13.5px;line-height:1.65;white-space:pre-wrap;color:var(--ink)}
 @media(max-width:560px){ .why{margin-left:0} }
@@ -962,15 +968,305 @@ function ordinalFrac(d){
   return ({2:"halves",3:"thirds",4:"quarters",5:"fifths",6:"sixths",8:"eighths"})[d] || (d+"ths");
 }
 
+/* ============================================================
+   PRE-ALGEBRA — Mon / Wed / Fri, weeks 6–15
+   Grade 5 5.OA carried forward into the Grade 6 6.EE on-ramp:
+   letters for unknowns, balancing equations, expressions, rules.
+   Every explanation says HOW (the steps) and WHY (the idea that
+   makes the step legal), and ends by putting the answer back in.
+   ============================================================ */
+const PREALG_FROM = 6;   // first week with a pre-algebra block
+const PREALG = [
+  { t:"Unknowns & letters", code:"5.OA → 6.EE.B.5", gen:"unknown",
+    obj:"Use a letter for a number you do not know yet, and find it by asking what the equation says.",
+    ex:"n + 8 = 15 asks: what number, plus 8, makes 15? Undo the + 8 by subtracting 8: 15 − 8 = 7. Check by putting it back: 7 + 8 = 15. A letter is just a box with a number hiding in it." },
+  { t:"Balancing: + and −", code:"6.EE.B.7", gen:"balanceAdd",
+    obj:"Solve one-step equations with adding and subtracting by doing the same thing to both sides.",
+    ex:"x + 37 = 125. An equation is a balance — both sides weigh the same. Take 37 off the left to leave x alone, and you must take 37 off the right too: x = 125 − 37 = 88. Check: 88 + 37 = 125." },
+  { t:"Balancing: × and ÷", code:"6.EE.B.7", gen:"balanceMul",
+    obj:"Solve one-step equations with multiplying and dividing, using the inverse operation on both sides.",
+    ex:"7x = 91 means 7 groups of x make 91. Divide both sides by 7: x = 91 ÷ 7 = 13. Check: 7 × 13 = 91. Multiplying and dividing undo each other, just as adding and subtracting do." },
+  { t:"Evaluating expressions", code:"5.OA.A.1 → 6.EE.A.2c", gen:"evaluate",
+    obj:"Substitute a value for the letter, then use the order of operations to find the value.",
+    ex:"Find 3n + 4 when n = 6. Replace n with 6: 3 × 6 + 4. Multiply first (18), then add: 22. Writing 3n with no sign between means 3 × n." },
+  { t:"Words into expressions", code:"5.OA.A.2 → 6.EE.A.2a", gen:"words",
+    obj:"Turn a phrase into an expression, paying attention to which number comes first, then evaluate it.",
+    ex:"\"5 less than a number n\" is n − 5, NOT 5 − n: you start with n and take 5 away. If n = 12, that is 12 − 5 = 7." },
+  { t:"Distributing & like terms", code:"6.EE.A.3, A.4", gen:"distribute",
+    obj:"Use the distributive property to multiply in parts, and combine like terms.",
+    ex:"4(n + 3) means four lots of (n + 3): n + 3 + n + 3 + n + 3 + n + 3 = 4n + 12. And 3n + 5n = 8n, the same way 3 bags of apples plus 5 bags of apples is 8 bags." },
+  { t:"Input–output rules", code:"5.OA.B.3 → 6.EE.C.9", gen:"rules",
+    obj:"Apply a two-step rule, work a rule backwards, and find the rule from a table.",
+    ex:"Rule: × 4, then + 3. Input 5 → 5 × 4 = 20 → 20 + 3 = 23. To go backwards from 23, undo the steps in REVERSE order: 23 − 3 = 20, then 20 ÷ 4 = 5." },
+  { t:"Two-step equations", code:"6.EE.B.7 → 7.EE.B.4a", gen:"twostep",
+    obj:"Solve two-step equations by undoing the operations in reverse order.",
+    ex:"3x + 5 = 26. The last thing done to x was + 5, so undo that first: 3x = 21. Then undo the × 3: x = 7. Check: 3 × 7 + 5 = 26. Like taking off shoes before socks." },
+  { t:"Patterns & the nth term", code:"5.OA.B.3 → 6.EE.C.9", gen:"nth",
+    obj:"Find any term of a growing pattern without listing them all, and work out which term has a given value.",
+    ex:"4, 7, 10, 13, … starts at 4 and adds 3. Term 20 is the start plus 19 jumps of 3 (term 1 needs no jumps): 4 + 19 × 3 = 61." },
+  { t:"Inequalities & word problems", code:"6.EE.B.8, B.7", gen:"ineq",
+    obj:"Find the whole numbers that make an inequality true, and write and solve an equation from a story.",
+    ex:"x + 7 > 15: x + 7 = 15 when x = 8, but we need MORE than 15, so x must be bigger than 8. The smallest whole number that works is 9. Check: 9 + 7 = 16, which is more than 15." },
+];
+const paUnitOf = (n) => { const u = weekOf(n) - PREALG_FROM; return u >= 0 && u < PREALG.length ? u : -1; };
+
+const PA = {
+  unknown(r){
+    const t=ri(r,0,3);
+    if(t===0){ const a=ri(r,6,29), x=ri(r,4,40), b=x+a;
+      return { q:"n + "+a+" = "+b+".  What is n?", a:x,
+        why:"Read it as a question: what number, plus "+a+", makes "+b+"?\n"+
+            "HOW: undo the + "+a+" by subtracting "+a+":  "+b+" − "+a+" = "+x+"\n"+
+            "WHY: subtracting is the opposite of adding, so it takes you back to the number you started with.\n"+
+            "Check: "+x+" + "+a+" = "+b+" ✓" }; }
+    if(t===1){ const a=ri(r,5,30), b=ri(r,5,40), x=a+b;
+      return { q:"n − "+a+" = "+b+".  What is n?", a:x,
+        why:"n is the STARTING amount. Taking "+a+" away left "+b+".\n"+
+            "HOW: put the "+a+" back:  "+b+" + "+a+" = "+x+"\n"+
+            "WHY: adding undoes subtracting. A common slip is to subtract again ("+b+" − "+a+" = "+(b-a)+") — but the start must be BIGGER than what was left.\n"+
+            "Check: "+x+" − "+a+" = "+b+" ✓" }; }
+    if(t===2){ const a=ri(r,3,12), x=ri(r,3,12), b=a*x;
+      return { q:a+" × n = "+b+".  What is n?", a:x,
+        why:a+" × n means "+a+" groups of n, and together they make "+b+".\n"+
+            "HOW: share "+b+" into "+a+" equal groups:  "+b+" ÷ "+a+" = "+x+"\n"+
+            "WHY: dividing undoes multiplying — it asks how big each of the "+a+" groups is.\n"+
+            "Check: "+a+" × "+x+" = "+b+" ✓" }; }
+    const q=ri(r,3,12), x=ri(r,3,12), b=q*x;
+    return { q:b+" ÷ n = "+q+".  What is n?", a:x,
+      why:b+" split into n equal groups gives "+q+" in each group. How many groups?\n"+
+          "HOW: count how many "+q+"s fit into "+b+":  "+b+" ÷ "+q+" = "+x+"\n"+
+          "WHY: if n groups of "+q+" make "+b+", then n × "+q+" = "+b+", and dividing undoes that.\n"+
+          "Check: "+b+" ÷ "+x+" = "+q+" ✓" };
+  },
+
+  balanceAdd(r){
+    const t=ri(r,0,3), x=ri(r,24,260), a=ri(r,17,190);
+    if(t===0) return { q:"x + "+a+" = "+(x+a)+".  Solve for x.", a:x,
+      why:"Think of a balance: both sides weigh the same.\n"+
+          "HOW: take "+a+" off the left so x is alone — and take "+a+" off the right too:\n"+
+          "  x + "+a+" − "+a+" = "+(x+a)+" − "+a+"\n  x = "+x+"\n"+
+          "WHY: doing the SAME thing to both sides keeps it balanced, so the equation stays true.\n"+
+          "Check: "+x+" + "+a+" = "+(x+a)+" ✓" };
+    if(t===1) return { q:(x+a)+" = x + "+a+".  Solve for x.", a:x,
+      why:"The x can sit on either side — = just means both sides are equal.\n"+
+          "HOW: take "+a+" off both sides:  "+(x+a)+" − "+a+" = x, so x = "+x+"\n"+
+          "WHY: same move on both sides keeps the balance level.\n"+
+          "Check: "+x+" + "+a+" = "+(x+a)+" ✓" };
+    if(t===2) return { q:"x − "+a+" = "+x+".  Solve for x.", a:x+a,
+      why:"Something had "+a+" taken away and "+x+" was left.\n"+
+          "HOW: add "+a+" to both sides:  x − "+a+" + "+a+" = "+x+" + "+a+", so x = "+(x+a)+"\n"+
+          "WHY: adding "+a+" cancels the − "+a+" on the left, and the right must get the same "+a+".\n"+
+          "Check: "+(x+a)+" − "+a+" = "+x+" ✓" };
+    const tot=ri(r,300,900), ans=ri(r,40,tot-40);
+    return { q:tot+" − x = "+(tot-ans)+".  Solve for x.", a:ans,
+      why:"Careful — here x is the part being TAKEN AWAY, not the start.\n"+
+          "HOW: "+tot+" minus something leaves "+(tot-ans)+", so that something is the gap:\n"+
+          "  x = "+tot+" − "+(tot-ans)+" = "+ans+"\n"+
+          "WHY: the part taken plus the part left make the whole: x + "+(tot-ans)+" = "+tot+".\n"+
+          "Check: "+tot+" − "+ans+" = "+(tot-ans)+" ✓" };
+  },
+
+  balanceMul(r){
+    const t=ri(r,0,2);
+    if(t===0){ const a=ri(r,4,15), x=ri(r,6,25);
+      return { q:a+"x = "+(a*x)+".  Solve for x.", a:x,
+        why:a+"x means "+a+" × x — a number and a letter side by side are multiplied.\n"+
+            "HOW: divide both sides by "+a+":  "+(a*x)+" ÷ "+a+" = "+x+", so x = "+x+"\n"+
+            "WHY: ÷ "+a+" undoes × "+a+", and doing it to both sides keeps the balance.\n"+
+            "Check: "+a+" × "+x+" = "+(a*x)+" ✓" }; }
+    if(t===1){ const d=ri(r,3,12), q=ri(r,4,20);
+      return { q:"x ÷ "+d+" = "+q+".  Solve for x.", a:d*q,
+        why:"x was split into "+d+" equal parts and each part was "+q+".\n"+
+            "HOW: multiply both sides by "+d+":  x = "+q+" × "+d+" = "+(d*q)+"\n"+
+            "WHY: × "+d+" undoes ÷ "+d+" — put the "+d+" equal parts back together to get the whole.\n"+
+            "Check: "+(d*q)+" ÷ "+d+" = "+q+" ✓" }; }
+    const a=pick(r,[2,4,5,10]), x=round2(ri(r,11,99)/10);
+    return { q:a+"x = "+round2(a*x)+".  Solve for x.", a:x,
+      why:"Same idea with a decimal: "+a+" × x = "+round2(a*x)+".\n"+
+          "HOW: divide both sides by "+a+":  "+round2(a*x)+" ÷ "+a+" = "+x+"\n"+
+          "WHY: dividing undoes multiplying, whether the answer is whole or not.\n"+
+          "Check: "+a+" × "+x+" = "+round2(a*x)+" ✓" };
+  },
+
+  evaluate(r){
+    const t=ri(r,0,3), n=ri(r,2,12);
+    if(t===0){ const a=ri(r,2,9), b=ri(r,1,20);
+      return { q:"Find "+a+"n + "+b+" when n = "+n+".", a:a*n+b,
+        why:"HOW: swap n for "+n+" — write it out in full so the × is not lost:\n"+
+            "  "+a+" × "+n+" + "+b+"\n  = "+(a*n)+" + "+b+"   (multiply first)\n  = "+(a*n+b)+"\n"+
+            "WHY: "+a+"n means "+a+" × n, and multiplying comes before adding. "+
+            "Writing "+a+n+" (gluing the digits) is the classic slip." }; }
+    if(t===1){ const b=ri(r,1,n-1), a=ri(r,2,8);
+      return { q:"Find "+a+"(n − "+b+") when n = "+n+".", a:a*(n-b),
+        why:"HOW: swap n for "+n+", then brackets first:\n"+
+            "  "+a+" × ("+n+" − "+b+")\n  = "+a+" × "+(n-b)+"\n  = "+(a*(n-b))+"\n"+
+            "WHY: a number touching a bracket means multiply everything inside it — but the inside is worked out first." }; }
+    if(t===2){ const m=ri(r,2,6), b=ri(r,2,9);
+      return { q:"Find a + "+m+"b when a = "+n+" and b = "+b+".", a:n+m*b,
+        why:"Two letters, two swaps. a = "+n+" and b = "+b+".\n"+
+            "  "+n+" + "+m+" × "+b+"\n  = "+n+" + "+(m*b)+"   (multiply first)\n  = "+(n+m*b)+"\n"+
+            "WHY: each letter only ever stands for its own number; then the usual order of operations." }; }
+    const d=pick(r,[2,3,4,5]), k=ri(r,2,9), b=ri(r,1,15), v=d*k;
+    return { q:"Find n ÷ "+d+" + "+b+" when n = "+v+".", a:k+b,
+      why:"HOW: swap n for "+v+":\n  "+v+" ÷ "+d+" + "+b+"\n  = "+k+" + "+b+"   (divide first)\n  = "+(k+b)+"\n"+
+          "WHY: dividing, like multiplying, comes before adding. Adding first would give "+v+" ÷ "+(d+b)+" — a different question." };
+  },
+
+  words(r){
+    const n=ri(r,6,20), k=ri(r,2,9);
+    const T=[
+      ["\""+k+" more than a number n\"", "n + "+k, n+k, "\"More than\" means add on to n."],
+      ["\""+k+" less than a number n\"", "n − "+k, n-k, "\"Less than\" flips the order: start with n and take "+k+" away. "+k+" − n would be the wrong way round."],
+      ["\"the product of "+k+" and n\"", k+"n", k*n, "\"Product\" means multiply."],
+      ["\"twice a number n, plus "+k+"\"", "2n + "+k, 2*n+k, "\"Twice\" means × 2, then add."],
+      ["\""+k+" less than 3 times n\"", "3n − "+k, 3*n-k, "Build the \"3 times n\" first, then take "+k+" away from it."],
+      ["\""+k+" times the sum of n and 2\"", k+"(n + 2)", k*(n+2), "\"The sum of n and 2\" is one thing, so it goes in a bracket, and the whole bracket is multiplied."],
+    ];
+    const [ph,ex,v,rule]=pick(r,T);
+    return { q:"Write "+ph+" as an expression, then find its value when n = "+n+".", a:v,
+      why:"STEP 1 — words to symbols: "+rule+"\n  Expression: "+ex+"\n"+
+          "STEP 2 — swap n for "+n+" and work it out:\n  "+ex.replace(/(\d)n/g,"$1 × n").replace(/n/g,String(n))+" = "+v+"\n"+
+          "WHY: the expression is a recipe; the value is what you get once you know n." };
+  },
+
+  distribute(r){
+    const t=ri(r,0,3);
+    if(t===0){ const a=ri(r,2,9), b=ri(r,2,9);
+      return { q:a+"n + "+b+"n = ?n  (type the number in front of n)", a:a+b,
+        why:"These are LIKE TERMS — both are \"some number of n\".\n"+
+            "HOW: add the numbers in front:  "+a+" + "+b+" = "+(a+b)+", so "+(a+b)+"n.\n"+
+            "WHY: "+a+" bags of n plus "+b+" bags of n is "+(a+b)+" bags of n, whatever n is.\n"+
+            "Check with n = 2: "+a+"×2 + "+b+"×2 = "+(2*a+2*b)+", and "+(a+b)+"×2 = "+(2*(a+b))+" ✓" }; }
+    if(t===1){ const a=ri(r,6,12), b=ri(r,2,a-2), c=ri(r,1,4);
+      return { q:a+"n − "+b+"n + "+c+"n = ?n  (type the number in front of n)", a:a-b+c,
+        why:"All three are like terms, so work along the numbers in front, left to right:\n"+
+            "  "+a+" − "+b+" = "+(a-b)+"\n  "+(a-b)+" + "+c+" = "+(a-b+c)+"\n  so "+(a-b+c)+"n.\n"+
+            "WHY: n is the unit being counted, the way \"apples\" would be — only the count changes." }; }
+    if(t===2){ const a=ri(r,3,9), b=ri(r,2,9);
+      return { q:a+"(n + "+b+") = "+a+"n + ?  (type the missing number)", a:a*b,
+        why:a+"(n + "+b+") means "+a+" lots of (n + "+b+").\n"+
+            "HOW: multiply EACH part inside by "+a+":  "+a+" × n = "+a+"n,  "+a+" × "+b+" = "+(a*b)+"\n"+
+            "  so "+a+"(n + "+b+") = "+a+"n + "+(a*b)+"\n"+
+            "WHY: writing it out, ("+Array(a).fill("n + "+b).join(") + (")+") has "+a+" n's and "+a+" "+b+"'s.\n"+
+            "The slip is to multiply only the n and leave "+b+" alone." }; }
+    const a=ri(r,3,9), tens=ri(r,2,9)*10, ones=ri(r,1,9), N=tens+ones;
+    return { q:"Use the distributive property: "+a+" × "+N+" = ?", a:a*N,
+      why:"HOW: split "+N+" into "+tens+" + "+ones+", multiply each part, then add:\n"+
+          "  "+a+" × "+tens+" = "+(a*tens)+"\n  "+a+" × "+ones+" = "+(a*ones)+"\n  "+(a*tens)+" + "+(a*ones)+" = "+(a*N)+"\n"+
+          "WHY: "+a+" × ("+tens+" + "+ones+") = "+a+" × "+tens+" + "+a+" × "+ones+" — multiplying a sum part by part gives the same total. "+
+          "It is how you do big multiplication in your head." };
+  },
+
+  rules(r){
+    const t=ri(r,0,2), m=ri(r,2,6), b=ri(r,1,9);
+    if(t===0){ const x=ri(r,3,12);
+      return { q:"Rule: multiply by "+m+", then add "+b+". What is the output when the input is "+x+"?", a:m*x+b,
+        why:"HOW: follow the steps in the order given:\n  "+x+" × "+m+" = "+(m*x)+"\n  "+(m*x)+" + "+b+" = "+(m*x+b)+"\n"+
+            "As an expression: output = "+m+" × input + "+b+".\n"+
+            "WHY: a rule is a machine — same steps, same order, every time." }; }
+    if(t===1){ const x=ri(r,3,12), out=m*x+b;
+      return { q:"Rule: multiply by "+m+", then add "+b+". Which input gives an output of "+out+"?", a:x,
+        why:"Now you are going BACKWARDS, so undo the steps in REVERSE order:\n"+
+            "  the last step was + "+b+", so first subtract "+b+":  "+out+" − "+b+" = "+(out-b)+"\n"+
+            "  the first step was × "+m+", so then divide by "+m+":  "+(out-b)+" ÷ "+m+" = "+x+"\n"+
+            "WHY: whatever was done last has to be undone first — like unwrapping a present.\n"+
+            "Check: "+x+" × "+m+" + "+b+" = "+out+" ✓" }; }
+    const k=ri(r,8,15), outs=[1,2,3].map(i=>m*i+b);
+    return { q:"Inputs 1, 2, 3 give outputs "+outs.join(", ")+". Using the same rule, what is the output for input "+k+"?", a:m*k+b,
+      why:"STEP 1 — find the rule. Each time the input goes up 1, the output goes up "+m+", so the rule multiplies by "+m+".\n"+
+          "STEP 2 — find the add-on. 1 × "+m+" = "+m+", but the output is "+outs[0]+", so it adds "+b+".\n"+
+          "  Rule: output = "+m+" × input + "+b+"   (test it on 2: "+(2*m)+" + "+b+" = "+outs[1]+" ✓)\n"+
+          "STEP 3 — use it:  "+k+" × "+m+" + "+b+" = "+(m*k+b)+"\n"+
+          "WHY: the rule lets you jump straight to any input without listing every row." };
+  },
+
+  twostep(r){
+    const t=ri(r,0,2), x=ri(r,2,15);
+    if(t===0){ const a=ri(r,2,9), b=ri(r,1,20), c=a*x+b;
+      return { q:a+"x + "+b+" = "+c+".  Solve for x.", a:x,
+        why:"Two things were done to x: × "+a+", then + "+b+". Undo them in REVERSE order.\n"+
+            "  undo + "+b+":  "+a+"x = "+c+" − "+b+" = "+(c-b)+"\n"+
+            "  undo × "+a+":  x = "+(c-b)+" ÷ "+a+" = "+x+"\n"+
+            "WHY: each step is done to BOTH sides, so the balance never tips.\n"+
+            "Check: "+a+" × "+x+" + "+b+" = "+(a*x)+" + "+b+" = "+c+" ✓" }; }
+    if(t===1){ const d=ri(r,2,6), q=ri(r,3,12), b=ri(r,1,q-1), X=d*q;
+      return { q:"x ÷ "+d+" − "+b+" = "+(q-b)+".  Solve for x.", a:X,
+        why:"x was ÷ "+d+", then − "+b+". Undo in reverse order.\n"+
+            "  undo − "+b+":  x ÷ "+d+" = "+(q-b)+" + "+b+" = "+q+"\n"+
+            "  undo ÷ "+d+":  x = "+q+" × "+d+" = "+X+"\n"+
+            "Check: "+X+" ÷ "+d+" − "+b+" = "+q+" − "+b+" = "+(q-b)+" ✓" }; }
+    const a=ri(r,2,6), b=ri(r,1,9), c=a*(x+b);
+    return { q:a+"(x + "+b+") = "+c+".  Solve for x.", a:x,
+      why:"The bracket was worked out first, then × "+a+". So undo the × "+a+" first:\n"+
+          "  x + "+b+" = "+c+" ÷ "+a+" = "+(x+b)+"\n"+
+          "  x = "+(x+b)+" − "+b+" = "+x+"\n"+
+          "WHY: reverse order again — the bracket was done FIRST, so it is undone LAST.\n"+
+          "Check: "+a+" × ("+x+" + "+b+") = "+a+" × "+(x+b)+" = "+c+" ✓" };
+  },
+
+  nth(r){
+    const t=ri(r,0,2), s=ri(r,2,9), st=ri(r,1,12);
+    if(t===0){ const k=ri(r,12,30), seq=[0,1,2,3].map(i=>st+s*i);
+      return { q:"Pattern: "+seq.join(", ")+", …  What is term "+k+"?", a:st+s*(k-1),
+        why:"It starts at "+st+" and adds "+s+" each time.\n"+
+            "Term 1 has had NO jumps; term 2 has had 1; so term "+k+" has had "+(k-1)+" jumps.\n"+
+            "HOW:  "+st+" + "+(k-1)+" × "+s+" = "+st+" + "+(s*(k-1))+" = "+(st+s*(k-1))+"\n"+
+            "WHY: multiplying counts all the jumps at once instead of listing "+k+" numbers.\n"+
+            "Check on term 4: "+st+" + 3 × "+s+" = "+seq[3]+" ✓" }; }
+    if(t===1){ const m=ri(r,2,7), b=ri(r,1,m-1), k=ri(r,6,20), v=m*k-b;
+      return { q:"Rule: term = "+m+"n − "+b+", where n is the term number. Which term equals "+v+"?", a:k,
+        why:"Set the rule equal to "+v+" and solve:  "+m+"n − "+b+" = "+v+"\n"+
+            "  undo − "+b+":  "+m+"n = "+(v+b)+"\n  undo × "+m+":  n = "+(v+b)+" ÷ "+m+" = "+k+"\n"+
+            "WHY: a pattern rule is an equation in disguise — you already know how to undo it.\n"+
+            "Check: "+m+" × "+k+" − "+b+" = "+v+" ✓" }; }
+    const k=ri(r,8,25);
+    return { q:"Shape 1 uses 4 matchsticks (one square). Each new square in the row adds 3 more. How many matchsticks for shape "+k+"?", a:4+3*(k-1),
+      why:"Shape 1 = 4, shape 2 = 7, shape 3 = 10 … each new square shares one side, so only 3 are added.\n"+
+          "Shape "+k+" has had "+(k-1)+" squares added after the first:\n"+
+          "  4 + "+(k-1)+" × 3 = 4 + "+(3*(k-1))+" = "+(4+3*(k-1))+"\n"+
+          "WHY: "+k+" × 4 = "+(4*k)+" would count every shared side twice — that is the trap.\n"+
+          "Same thing as a rule: 3n + 1 → 3 × "+k+" + 1 = "+(3*k+1)+" ✓" };
+  },
+
+  ineq(r){
+    const t=ri(r,0,3);
+    if(t===0){ const a=ri(r,3,15), b=ri(r,a+3,40), eq=b-a;
+      return { q:"x + "+a+" > "+b+".  What is the SMALLEST whole number x can be?", a:eq+1,
+        why:"HOW: first find where it would be EQUAL:  x + "+a+" = "+b+" when x = "+eq+".\n"+
+            "But we need MORE than "+b+", so x must be bigger than "+eq+". The next whole number is "+(eq+1)+".\n"+
+            "Check:  "+eq+" + "+a+" = "+b+" — not more than "+b+" ✗;  "+(eq+1)+" + "+a+" = "+(b+1)+" ✓" }; }
+    if(t===1){ const a=ri(r,3,9), q=ri(r,4,12), rem=ri(r,1,a-1), b=a*q+rem;
+      return { q:a+"x < "+b+".  What is the LARGEST whole number x can be?", a:q,
+        why:"HOW: "+b+" ÷ "+a+" = "+q+" remainder "+rem+", so x is somewhere under "+round2(b/a)+".\n"+
+            "Test the whole numbers near it:\n  "+a+" × "+q+" = "+(a*q)+" < "+b+" ✓\n  "+a+" × "+(q+1)+" = "+(a*(q+1))+" — too big ✗\n"+
+            "So the largest whole number is "+q+".\n"+
+            "WHY: an inequality has many answers; the question asks for the edge of them." }; }
+    if(t===2){ const x=ri(r,12,60), a=ri(r,8,40), who=pick(r,["Maya","Leo","Aria","Sam"]);
+      return { q:who+" had some stickers, bought "+a+" more, and now has "+(x+a)+". How many did "+who+" start with?", a:x,
+        why:"STEP 1 — name the unknown: let s = the stickers at the start.\n"+
+            "STEP 2 — write what the story says:  s + "+a+" = "+(x+a)+"\n"+
+            "STEP 3 — solve: subtract "+a+" from both sides:  s = "+(x+a)+" − "+a+" = "+x+"\n"+
+            "WHY: writing the equation turns the story into something you already know how to undo.\n"+
+            "Check: "+x+" + "+a+" = "+(x+a)+" ✓" }; }
+    const p=ri(r,4,12), fee=ri(r,2,9), k=ri(r,3,9), tot=p*k+fee;
+    return { q:"Tickets cost $"+p+" each, plus a $"+fee+" booking fee for the whole order. The total was $"+tot+". How many tickets?", a:k,
+      why:"STEP 1 — let t = number of tickets.\n"+
+          "STEP 2 — the story as an equation:  "+p+"t + "+fee+" = "+tot+"   (the fee is paid once, not per ticket)\n"+
+          "STEP 3 — undo in reverse order:\n  "+p+"t = "+tot+" − "+fee+" = "+(tot-fee)+"\n  t = "+(tot-fee)+" ÷ "+p+" = "+k+"\n"+
+          "Check: "+k+" × $"+p+" + $"+fee+" = $"+tot+" ✓" };
+  },
+};
+
 /* fluency sprints — short, timed, Kumon-style */
 const SPRINT = {
   mult:{ label:"Multiplication & division facts", target:120, make(r){ const a=ri(r,3,12),b=ri(r,3,12);
-    if(r()<.65) return {q:a+" × "+b, a:a*b, why:a+" × "+b+" = "+(a*b)+". If it did not come instantly, count on from a fact you do know: "+a+" × "+(b-1)+" = "+(a*(b-1))+", then add "+a+"."};
+    if(r()<.65) return {q:a+" × "+b, a:a*b, why:a+" × "+b+" means "+b+" groups of "+a+".\nIf it did not come instantly, build it from a fact you do know: "+a+" × "+(b-1)+" = "+(a*(b-1))+", and one more group of "+a+" makes "+(a*(b-1))+" + "+a+" = "+(a*b)+".\nCheck the other way round: "+b+" × "+a+" is the same, because groups can be swapped."};
     return {q:(a*b)+" ÷ "+a, a:b, why:"Division undoes multiplication: ask \"" +a+" times what makes "+(a*b)+"?\" Answer: "+b+", because "+a+" × "+b+" = "+(a*b)+"."}; } },
   div:{ label:"Division facts & remainders", target:135, make(r){ const d=ri(r,3,12), q=ri(r,3,12);
     return {q:(d*q)+" ÷ "+d, a:q, why:"Ask \""+d+" times what makes "+(d*q)+"?\" — "+q+", since "+d+" × "+q+" = "+(d*q)+"."}; } },
   dec:{ label:"Decimal mental math", target:150, make(r){ const a=round2(ri(r,11,99)/10), b=round2(ri(r,11,99)/10);
-    if(r()<.5) return {q:a+" + "+b, a:round2(a+b), why:"Add the whole parts, then the tenths: "+Math.floor(a)+" + "+Math.floor(b)+" = "+(Math.floor(a)+Math.floor(b))+", and the tenths give the rest. Total "+round2(a+b)+"."};
+    if(r()<.5){ const ta=Math.round(a*10)%10, tb=Math.round(b*10)%10, wa=Math.floor(a), wb=Math.floor(b);
+      return {q:a+" + "+b, a:round2(a+b), why:"Split each number into wholes and tenths, and add like with like:\n  wholes: "+wa+" + "+wb+" = "+(wa+wb)+"\n  tenths: 0."+ta+" + 0."+tb+" = "+round2((ta+tb)/10)+(ta+tb>=10?"  (ten tenths make 1 whole, so it carries)":"")+"\n  together: "+(wa+wb)+" + "+round2((ta+tb)/10)+" = "+round2(a+b)+"\nWHY: wholes and tenths are different sizes of piece, so they are counted separately — just like lining up the decimal points."}; }
     return {q:a+" × 10", a:round2(a*10), why:"× 10 moves every digit one place left, so the decimal point appears to shift one right: "+a+" → "+round2(a*10)+"."}; } },
   fracid:{ label:"Equivalent fractions", target:150, make(r){ const d=pick(r,[2,3,4,5,6]), n=ri(r,1,d-1), m=ri(r,2,5);
     return {q:(n*m)+"/"+(d*m)+" in lowest terms (as a fraction)", a:n/d,
@@ -979,7 +1275,7 @@ const SPRINT = {
     return {q:n1+"/"+d+" + "+n2+"/"+d+" (lowest terms)", a:(n1+n2)/d,
       why:"The denominators already match, so add the numerators only and keep "+d+" underneath: "+n1+" + "+n2+" = "+(n1+n2)+", giving "+(n1+n2)+"/"+d+"."+simpNote(n1+n2,d)+" Never add the bottoms."}; } },
   mixed:{ label:"Mixed review", target:165, make(r){ const t=ri(r,0,2);
-    if(t===0){ const a=ri(r,4,12),b=ri(r,4,12); return {q:a+" × "+b, a:a*b, why:a+" × "+b+" = "+(a*b)+"."}; }
+    if(t===0){ const a=ri(r,4,12),b=ri(r,4,12); return {q:a+" × "+b, a:a*b, why:a+" × "+b+" means "+b+" groups of "+a+".\nIf it did not come instantly, split "+b+" into "+Math.floor(b/2)+" + "+(b-Math.floor(b/2))+":\n  "+a+" × "+Math.floor(b/2)+" = "+(a*Math.floor(b/2))+"\n  "+a+" × "+(b-Math.floor(b/2))+" = "+(a*(b-Math.floor(b/2)))+"\n  "+(a*Math.floor(b/2))+" + "+(a*(b-Math.floor(b/2)))+" = "+(a*b)}; }
     if(t===1){ const a=round2(ri(r,11,99)/10); return {q:a+" × 100", a:round2(a*100), why:"× 100 shifts the decimal point two places right: "+a+" → "+round2(a*100)+"."}; }
     const a=ri(r,2,9),b=ri(r,2,9),c=ri(r,2,9);
     return {q:a+" + "+b+" × "+c, a:a+b*c, why:"Multiply before you add: "+b+" × "+c+" = "+(b*c)+", then "+a+" + "+(b*c)+" = "+(a+b*c)+". Adding first would give "+((a+b)*c)+", which is wrong."}; } }
@@ -1123,8 +1419,12 @@ function shapeOf(n){
   const sub = (b) => Object.assign({}, off, { m: b.m });
   if (d === 5) return engLoaded() ? SHAPES.saturday : SHAPES.saturday.map(b => b.k === "writing" ? sub(b) : b);
   if (d === 6) return engLoaded() ? SHAPES.sunday : SHAPES.sunday.map(b => b.k === "dictation" ? sub(b) : b);
-  return SHAPES.weekday.concat([ engLoaded() ? ENG_SLOTS[engSlot(n)] : off ]);
+  const day = SHAPES.weekday.slice();
+  // Pre-algebra on Mon / Wed / Fri, straight after the other maths blocks.
+  if ((d === 0 || d === 2 || d === 4) && paUnitOf(n) >= 0) day.splice(3, 0, PREALG_SLOT);
+  return day.concat([ engLoaded() ? ENG_SLOTS[engSlot(n)] : off ]);
 }
+const PREALG_SLOT = { k:"prealg", t:"Pre-Algebra", s:"Letters, equations and rules — every step explained", m:10, strand:"math" };
 const DOW = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 function dateOfLesson(n){ const d=new Date(START); d.setDate(d.getDate()+(n-1)); return d; }
 function scheduledToday(){ const t=new Date(); t.setHours(0,0,0,0);
@@ -1233,7 +1533,7 @@ function markDone(key,el2){
 /* ---------- question list helper ---------- */
 function qlist(host,{key,items,onDone,label}){
   const box=el("div");
-  const whys=[];
+  const whys=[], toggles=[];
   items.forEach((it,i)=>{
     const row=el("div","q");
     row.innerHTML='<span class="qn">'+(i+1)+'</span><span class="qtext"><span class="qmath">'+esc(it.q)+'</span></span>';
@@ -1244,6 +1544,9 @@ function qlist(host,{key,items,onDone,label}){
     box.appendChild(row);
     // A wrong answer with no explanation teaches nothing, so every problem
     // carries its own worked reasoning, shown only when it is needed.
+    const tg=el("button","whytoggle","See how & why");
+    box.appendChild(tg);
+    toggles.push(tg);
     const w=el("div","why");
     w.innerHTML='<div class="why-h">How to get there</div><div class="why-b"></div>';
     box.appendChild(w);
@@ -1257,12 +1560,28 @@ function qlist(host,{key,items,onDone,label}){
   bar.appendChild(cb); bar.appendChild(sb);
   host.appendChild(bar); host.appendChild(res);
 
-  function reveal(i){
+  function fill(i){
     const it=items[i], w=whys[i];
-    if(!it.why){ w.classList.remove("show"); return; }
+    if(!it.why) return false;
     const NL2=String.fromCharCode(10);
     w.querySelector(".why-b").textContent = it.why + NL2 + NL2 + "Answer: " + showAns(it.a, it.q);
-    w.classList.add("show");
+    return true;
+  }
+  function reveal(i){
+    const w=whys[i];
+    w.classList.remove("calm"); toggles[i].classList.remove("show");
+    if(fill(i)) w.classList.add("show"); else w.classList.remove("show");
+  }
+  // A right answer can still be a lucky guess, so its working is one tap away
+  // rather than forced open — the screen stays readable, the "why" stays there.
+  function offer(i){
+    const w=whys[i], tg=toggles[i];
+    w.classList.remove("show");
+    if(!fill(i)){ tg.classList.remove("show"); return; }
+    w.classList.add("calm");
+    w.querySelector(".why-h").textContent="Why this works";
+    tg.textContent="See how & why"; tg.classList.add("show");
+    tg.onclick=()=>{ const open=w.classList.toggle("show"); tg.textContent=open?"Hide working":"See how & why"; };
   }
 
   function check(){
@@ -1273,8 +1592,9 @@ function qlist(host,{key,items,onDone,label}){
       inp.classList.toggle("ok",ok); inp.classList.toggle("no",!ok&&tried);
       const mk=inp.nextSibling; mk.textContent = ok?"✓":(tried?"✗":"");
       mk.style.color = ok?"var(--good)":"var(--warn)";
-      if(ok){ got++; whys[i].classList.remove("show"); }
-      else if(tried){ reveal(i); }     // explain only what they actually got wrong
+      whys[i].querySelector(".why-h").textContent="How to get there";
+      if(ok){ got++; offer(i); }
+      else if(tried){ reveal(i); }     // wrong answers open their working automatically
       if(ok) inp.setAttribute("readonly","readonly"); else inp.removeAttribute("readonly");
     });
     const pct=Math.round(got/items.length*100);
@@ -1323,6 +1643,20 @@ const BUILD = {
     const r=rng(seedFor(n,"mathnew")), g=GEN[wk.gen], items=[];
     for(let i=0;i<8;i++) items.push(g(r));
     qlist(host,{key,items,onDone:(gt,tot)=>{ logBlock(n,"math",{score:gt,of:tot}); markDone(key,host); }});
+  },
+
+  prealg(host,{n,key}){
+    const u=paUnitOf(n), unit=PREALG[u], r=rng(seedFor(n,"prealg")), items=[];
+    host.appendChild(el("div","row",'<span class="pill math">Unit '+(u+1)+' of '+PREALG.length+'</span>'+
+      '<span class="muted" style="font-size:13.5px">'+esc(unit.t)+' &middot; '+esc(unit.code)+'</span>'));
+    host.appendChild(el("p","muted",esc(unit.obj)));
+    host.appendChild(el("div","example",'<h4>Worked example</h4><p>'+esc(unit.ex)+'</p>'));
+    // Most problems are this unit's; from unit 2 on, one comes back from an earlier unit.
+    for(let i=0;i<6;i++){
+      if(i===5 && u>0){ const pu=ri(r,0,u-1), it=PA[PREALG[pu].gen](r); it.q="(Unit "+(pu+1)+") "+it.q; items.push(it); }
+      else items.push(PA[unit.gen](r));
+    }
+    qlist(host,{key,items,onDone:(gt,tot)=>{ logBlock(n,"prealg",{score:gt,of:tot}); markDone(key,host); }});
   },
 
   spiral(host,{n,wk,key}){
@@ -1446,10 +1780,15 @@ const BUILD = {
   },
 
   check(host,{n,wk,key}){
-    const r=rng(seedFor(n,"check")), items=[], w=weekOf(n);
-    for(let i=0;i<6;i++) items.push(GEN[wk.gen](r));
-    for(let i=0;i<4;i++){ const pw=w>1?ri(r,1,w-1):w; const it=GEN[WEEKS[pw-1].gen](r); it.q="(Wk "+pw+") "+it.q; items.push(it); }
-    host.appendChild(el("p","muted","Ten problems: six from this week, four from earlier. Eight or more is mastery — move to next week. Seven or fewer, repeat this week's focus before advancing."));
+    const r=rng(seedFor(n,"check")), items=[], w=weekOf(n), u=paUnitOf(n);
+    // From week 6 two of the ten are pre-algebra: this week's unit, then any earlier one.
+    const pa = u>=0 ? 2 : 0;
+    for(let i=0;i<6-pa/2;i++) items.push(GEN[wk.gen](r));
+    for(let i=0;i<4-pa/2;i++){ const pw=w>1?ri(r,1,w-1):w; const it=GEN[WEEKS[pw-1].gen](r); it.q="(Wk "+pw+") "+it.q; items.push(it); }
+    for(let i=0;i<pa;i++){ const pu=i===0?u:ri(r,0,u); const it=PA[PREALG[pu].gen](r); it.q="(Pre-algebra) "+it.q; items.push(it); }
+    host.appendChild(el("p","muted", pa
+      ? "Ten problems: five from this week, three from earlier, two pre-algebra. Eight or more is mastery — move to next week. Seven or fewer, repeat this week's focus before advancing."
+      : "Ten problems: six from this week, four from earlier. Eight or more is mastery — move to next week. Seven or fewer, repeat this week's focus before advancing."));
     qlist(host,{key,items,label:"Score the check",onDone:(g,tot)=>{ logBlock(n,"check",{score:g,of:tot}); markDone(key,host); }});
   },
 
@@ -1831,7 +2170,7 @@ function renderProgress(){
 function planPreview(){
   const d=el("div");
   d.appendChild(el("div","dayhead",'<div class="eyebrow">September 7 &ndash; December 20, 2026</div>'+
-    '<h1>Fifteen weeks, 45 minutes a day</h1>'+
+    '<h1>Fifteen weeks, 45&ndash;55 minutes a day</h1>'+
     '<p class="muted" style="margin:0;max-width:62ch">A full Grade 5 New Jersey math sequence plus daily reading, vocabulary, grammar and writing. Add two names above to begin.</p>'));
   d.appendChild(planBody());
   return d;
@@ -1845,9 +2184,10 @@ function renderPlan(){
 function planBody(){
   const d=el("div");
   const shape=el("div","card"); shape.style.margin="20px 0";
-  shape.innerHTML='<div class="eyebrow" style="margin-bottom:10px">Where the 45 minutes goes</div>'+
+  shape.innerHTML='<div class="eyebrow" style="margin-bottom:10px">Where the time goes</div>'+
     '<div class="tablewrap"><table><thead><tr><th>Day</th><th>Shape</th><th>Math</th><th>English</th></tr></thead><tbody>'+
-    '<tr><td>Mon&ndash;Fri</td><td>Six blocks</td><td class="num">25 min</td><td class="num">20 min</td></tr>'+
+    '<tr><td>Mon, Wed, Fri</td><td>Six blocks, incl. Pre-Algebra (from week '+PREALG_FROM+')</td><td class="num">35 min</td><td class="num">20 min</td></tr>'+
+    '<tr><td>Tue, Thu</td><td>Five blocks</td><td class="num">25 min</td><td class="num">20 min</td></tr>'+
     '<tr><td>Saturday</td><td>Writing studio</td><td class="num">15 min</td><td class="num">30 min</td></tr>'+
     '<tr><td>Sunday</td><td>Consolidation &mdash; no new material</td><td class="num">25 min</td><td class="num">20 min</td></tr>'+
     '</tbody></table></div>'+
@@ -1857,9 +2197,11 @@ function planBody(){
   const h=el("h2"); h.style.cssText="font-size:19px;margin:22px 0 10px"; h.textContent="Week by week";
   d.appendChild(h);
   const tw=el("div","tablewrap");
-  let rows='<table><thead><tr><th>Wk</th><th>Math focus</th><th>Standard</th><th>Reading focus</th><th>Roots</th></tr></thead><tbody>';
+  let rows='<table><thead><tr><th>Wk</th><th>Math focus</th><th>Standard</th><th>Pre-algebra</th><th>Reading focus</th><th>Roots</th></tr></thead><tbody>';
   WEEKS.forEach(w=>{
+    const pu=w.n-PREALG_FROM, pa=PREALG[pu];
     rows+='<tr><td class="num">'+w.n+'</td><td><b>'+esc(w.strand)+'</b></td><td class="num" style="font-size:12.5px">'+esc(w.code)+
+      '</td><td>'+(pa?esc(pa.t):'<span class="muted">&mdash;</span>')+
       '</td><td>'+esc(w.focus)+'</td><td class="mono" style="font-size:12.5px">'+w.roots.map(x=>esc(x[0])).join(", ")+'</td></tr>';
   });
   rows+='</tbody></table>';
@@ -1947,6 +2289,7 @@ function cloudPayload(){
     if(L.math&&L.math.of) out.m=[L.math.score,L.math.of];
     if(L.spiral&&L.spiral.of) out.s=[L.spiral.score,L.spiral.of];
     if(L.check&&L.check.of) out.c=[L.check.score,L.check.of];
+    if(L.prealg&&L.prealg.of) out.p=[L.prealg.score,L.prealg.of];
     if(L.sprint&&L.sprint.of) out.f=[L.sprint.score,L.sprint.of,L.sprint.sec||0];
     if(L.reading) out.r=1;
     if(L.writing) out.w=1;
@@ -2037,9 +2380,10 @@ function analyse(kid){
   const L=kid.log||{};
   const keys=Object.keys(L).map(k=>+k.slice(1)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
   const at=(n,f)=>{ const e=L["L"+n]; return e&&e[f]?e[f]:null; };
-  const mathAll=[], mathRecent=[], sprintTimes=[], checks=[];
+  const mathAll=[], mathRecent=[], sprintTimes=[], checks=[], preAll=[];
   keys.forEach(n=>{
     const m=at(n,"m"); if(m) mathAll.push(m);
+    const p=at(n,"p"); if(p) preAll.push(p);
     const f=at(n,"f"); if(f&&f[2]) sprintTimes.push({L:n,sec:f[2]});
     const c=at(n,"c"); if(c) checks.push({L:n,pct:Math.round(c[0]/c[1]*100)});
   });
@@ -2070,6 +2414,7 @@ function analyse(kid){
 
   return { keys, mathAll, mathRecent, sprintTimes, checks, expected, behind, idle,
            accAll:pctOf(mathAll), accRecent, sprintTrend, flags,
+           preAcc:pctOf(preAll), preRecent:pctOf(preAll.slice(-3)), preSessions:preAll.length,
            sessions:keys.length,
            week:weekOf(kid.lesson) };
 }
@@ -2132,6 +2477,8 @@ function parentCard(kid){
          a.idle===null?"—":a.idle===0?"active today":a.idle===1?"last active yesterday":"last active "+a.idle+" days ago")+
     cell("Math accuracy", a.accAll===null?"—":a.accAll+"%",
          a.accRecent===null?"no sessions yet":"last 7 sessions: "+a.accRecent+"%")+
+    cell("Pre-algebra", a.preAcc===null?"—":a.preAcc+"%",
+         a.preSessions?"last 3 sessions: "+a.preRecent+"%":"starts in week "+PREALG_FROM)+
     cell("Sessions logged", String(a.sessions),
          a.sprintTrend===null?"—":a.sprintTrend<-3?"sprint getting faster":a.sprintTrend>3?"sprint slowing":"sprint steady");
   card.appendChild(stats);
